@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1320">
+<title>Leitor NFC Hyrox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Leitor de estação: um ecrã, pensado para ficar fixo num suporte. Estado em cima, feedback gigante ao centro, histórico em baixo. */
+:root{
+  --floor:#0b1320; --tile:#142034; --tile-hi:#1b2a43; --line:#26375a;
+  --chalk:#eef2f8; --muted:#8e9cb6; --track:#a3463a;
+  --gold:#f2c14e; --ok:#2fbf71; --warn:#f0a43a; --bad:#e5484d;
+  --f-display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
+  --f-body:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--floor);color:var(--chalk);font-family:var(--f-body);font-size:16px;-webkit-tap-highlight-color:transparent;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{min-height:100%;display:flex;flex-direction:column;gap:14px;padding-block:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.eyebrow{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{margin:0;font-family:var(--f-display);font-weight:900;text-transform:uppercase;line-height:.95;font-size:2.4rem;text-wrap:balance}
+h1 span{color:var(--gold)}
+button{font:inherit;font-weight:700;color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:8px;padding:12px 16px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button.primary{background:var(--chalk);color:var(--floor);border-color:var(--chalk);font-size:1.15rem;padding:16px}
+p{margin:0;line-height:1.45}
+
+/* Configuração */
+#setup{display:flex;flex-direction:column;gap:16px}
+.points{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.pt{text-align:left;display:flex;flex-direction:column;gap:2px;padding:12px}
+.pt b{font-family:var(--f-display);font-weight:800;font-size:1.25rem;text-transform:uppercase;line-height:1}
+.pt small{color:var(--muted);font-weight:500;font-size:.78rem}
+.pt.run{background:var(--track);border-color:transparent}
+.pt.run small{color:rgba(255,236,230,.8)}
+.pt[aria-pressed="true"]{outline:3px solid var(--gold);outline-offset:-3px}
+.hint{color:var(--muted);font-size:.9rem}
+.err{background:rgba(229,72,77,.12);border:1px solid var(--bad);border-radius:8px;padding:12px;color:#ffd7d8}
+
+/* Leitor ativo */
+#reader{flex:1;display:flex;flex-direction:column;gap:12px;min-height:0}
+.bar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.where{font-family:var(--f-display);font-weight:900;font-size:1.9rem;text-transform:uppercase;line-height:1}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:.78rem;font-weight:600;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.chip.ok i{background:var(--ok)}
+.chip.bad i{background:var(--bad)}
+.stage{flex:1;min-height:240px;border-radius:14px;background:var(--tile);border:2px dashed var(--line);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:16px;transition:background .15s,border-color .15s}
+.stage .big{font-family:var(--f-display);font-weight:900;font-size:clamp(4rem,26vw,9rem);line-height:.85;text-transform:uppercase}
+.stage .msg{font-size:1.15rem;font-weight:600}
+.stage .sub{font-size:.9rem;color:var(--muted)}
+.stage.idle .big{font-size:clamp(2.2rem,12vw,4rem);color:var(--muted)}
+.stage.ok{background:var(--ok);border:2px solid var(--ok);color:#06210f}
+.stage.ok .sub{color:#0b3a1d}
+.stage.queued{background:var(--warn);border:2px solid var(--warn);color:#2b1700}
+.stage.queued .sub{color:#4a2a00}
+.stage.dup{background:var(--tile-hi);border:2px solid var(--muted)}
+.stage.bad{background:var(--bad);border:2px solid var(--bad);color:#fff}
+.stage.bad .sub{color:#ffe1e2}
+.pulse{width:64px;height:64px;border-radius:50%;border:3px solid var(--muted);position:relative;margin-bottom:6px}
+.pulse::after{content:"";position:absolute;inset:-3px;border-radius:50%;border:3px solid var(--chalk);animation:ring 1.8s ease-out infinite}
+@keyframes ring{from{transform:scale(1);opacity:.7}to{transform:scale(1.9);opacity:0}}
+.log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.log li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:baseline;padding:7px 0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
+.log li:first-child{border-top:0}
+.log .t{color:var(--muted);font-size:.85rem}
+.log .s{font-size:.8rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.log .s.ok{color:var(--ok)}.log .s.queued{color:var(--warn)}.log .s.bad{color:var(--bad)}.log .s.dup{color:var(--muted)}
+.foot{display:flex;gap:8px;flex-wrap:wrap}
+.foot button{flex:1;padding:10px;font-size:.9rem}
+@media (prefers-reduced-motion:reduce){.pulse::after{animation:none}.stage{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Simulação Hyrox · leitor de estação</span>
+    <h1>Leitor <span>NFC</span></h1>
+  </header>
+
+  <section id="setup">
+    <div id="unsupported" class="err" hidden>
+      <p><b>Este telemóvel não consegue ler chapinhas nesta página.</b> Precisa de ser Android com NFC, a usar o Google Chrome. Em iPhone não funciona.</p>
+    </div>
+    <div>
+      <span class="eyebrow">1 · Onde fica este telemóvel?</span>
+    </div>
+    <div class="points" id="points"></div>
+    <div><span class="eyebrow">2 · Ativar</span></div>
+    <button class="primary" id="bGo" type="button" disabled>Escolhe o ponto primeiro</button>
+    <p class="hint">Na primeira vez, o Chrome pede autorização para usar o NFC: carrega em Permitir. Depois deixa o ecrã ligado com esta página aberta. Se o ecrã apagar ou mudares de app, o leitor para.</p>
+  </section>
+
+  <section id="reader" hidden>
+    <div class="bar">
+      <div>
+        <span class="eyebrow">Ponto de leitura</span>
+        <div class="where" id="whereTxt">Porta da box</div>
+      </div>
+      <div class="chips">
+        <span class="chip" id="chipNfc"><i></i><span>NFC</span></span>
+        <span class="chip" id="chipNet"><i></i><span>Internet</span></span>
+        <span class="chip" id="chipQ" hidden><i></i><span id="qTxt">0 por enviar</span></span>
+      </div>
+    </div>
+
+    <div class="stage idle" id="stage" role="status" aria-live="assertive">
+      <div class="pulse" id="pulse"></div>
+      <div class="big" id="big">Encosta</div>
+      <div class="msg" id="msg">Encosta a chapinha nas costas do telemóvel</div>
+      <div class="sub" id="sub">Toque rápido e afasta</div>
+    </div>
+
+    <div>
+      <span class="eyebrow">Últimas leituras neste telemóvel</span>
+      <ul class="log" id="log"></ul>
+    </div>
+
+    <div class="foot">
+      <button id="bTest" type="button">Testar som</button>
+      <button id="bChange" type="button">Mudar ponto</button>
+    </div>
+  </section>
+</div>
+
+<script>
+(function(){
+const FN='https://cxxufzwgkvqlnexabvnf.supabase.co/functions/v1/hyrox-tap';
+const DEDUP_MS=8000;          // a mesma chapinha encostada várias vezes seguidas conta 1 vez
+const POINTS=[
+  {id:'box',name:'Porta da box',sub:'Entrada e saída das estações',run:false},
+  {id:'500m',name:'500 m',sub:'Viragem da corrida',run:true},
+  {id:'ski',name:'SkiErg',sub:'Estação 1',run:false},
+  {id:'sledpush',name:'Sled Push',sub:'Estação 2',run:false},
+  {id:'sledpull',name:'Sled Pull',sub:'Estação 3',run:false},
+  {id:'bbj',name:'Burpee Broad Jumps',sub:'Estação 4',run:false},
+  {id:'row',name:'Rowing',sub:'Estação 5',run:false},
+  {id:'farmers',name:'Farmers Carry',sub:'Estação 6',run:false},
+  {id:'lunges',name:'Sandbag Lunges',sub:'Estação 7',run:false},
+  {id:'wallballs',name:'Wall Balls',sub:'Estação 8',run:false}
+];
+const $=id=>document.getElementById(id);
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const supported='NDEFReader' in window;
+
+let point=new URLSearchParams(location.search).get('p')||store.get('hx_point')||'';
+if(!POINTS.some(p=>p.id===point)) point='';
+let queue=[];try{queue=JSON.parse(store.get('hx_queue')||'[]')}catch(e){queue=[]}
+const lastSeen={};   // equipa -> ms da última leitura aceite
+let log=[];
+
+/* ---- Configuração ---- */
+const pts=$('points');
+POINTS.forEach(p=>{
+  const b=document.createElement('button');b.type='button';b.className='pt'+(p.run?' run':'');
+  b.innerHTML=`<b>${p.name}</b><small>${p.sub}</small>`;b.dataset.id=p.id;
+  b.addEventListener('click',()=>{point=p.id;store.set('hx_point',point);paintSetup();});
+  pts.appendChild(b);
+});
+function paintSetup(){
+  pts.querySelectorAll('.pt').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.id===point)));
+  const go=$('bGo');
+  if(!supported){go.disabled=true;go.textContent='Leitor indisponível neste telemóvel';$('unsupported').hidden=false;return;}
+  go.disabled=!point;go.textContent=point?`Ativar leitor · ${POINTS.find(p=>p.id===point).name}`:'Escolhe o ponto primeiro';
+}
+paintSetup();
+
+/* ---- Som e vibração ---- */
+let ac=null;
+function unlockAudio(){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();if(ac.state==='suspended')ac.resume();}catch(e){}}
+function beep(kind){
+  try{
+    if(!ac)return;const now=ac.currentTime;
+    const tones=kind==='ok'?[[1046,0,.12],[1568,.11,.16]]:kind==='queued'?[[880,0,.18]]:kind==='dup'?[[600,0,.08]]:[[220,0,.35]];
+    tones.forEach(([f,s,d])=>{const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.frequency.value=f;
+      g.gain.setValueAtTime(.0001,now+s);g.gain.exponentialRampToValueAtTime(.25,now+s+.01);g.gain.exponentialRampToValueAtTime(.0001,now+s+d);
+      o.connect(g).connect(ac.destination);o.start(now+s);o.stop(now+s+d+.02);});
+  }catch(e){}
+  try{navigator.vibrate&&navigator.vibrate(kind==='ok'?120:kind==='bad'?[200,80,200]:60);}catch(e){}
+}
+
+/* ---- Feedback no ecrã ---- */
+let idleT;
+function show(kind,big,msg,sub){
+  const st=$('stage');st.className='stage '+kind;
+  $('pulse').hidden=kind!=='idle';$('big').textContent=big;$('msg').textContent=msg;$('sub').textContent=sub||'';
+  clearTimeout(idleT);
+  if(kind!=='idle') idleT=setTimeout(()=>show('idle','Encosta','Encosta a chapinha nas costas do telemóvel','Toque rápido e afasta'),kind==='bad'?4000:2200);
+}
+function addLog(team,status,label){
+  const d=new Date();log.unshift({t:d.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),team,status,label});
+  if(log.length>8)log.length=8;
+  $('log').innerHTML=log.map(x=>`<li><span class="t">${x.t}</span><span>${x.team?`Dupla ${x.team}`:'Chapinha'}</span><span class="s ${x.status}">${x.label}</span></li>`).join('');
+}
+
+/* ---- Envio com fila (se faltar internet, guarda e envia depois) ---- */
+function saveQ(){store.set('hx_queue',JSON.stringify(queue));const c=$('chipQ');c.hidden=!queue.length;c.className='chip'+(queue.length?'':' ok');$('qTxt').textContent=`${queue.length} por enviar`;}
+async function send(item){
+  const url=`${FN}?fmt=json&d=${item.d}&p=${encodeURIComponent(item.p)}&t=${item.t}`;
+  const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),6000);
+  try{const r=await fetch(url,{cache:'no-store',signal:ctl.signal});clearTimeout(to);
+    if(r.ok)return 'ok'; if(r.status>=400&&r.status<500)return 'reject'; return 'retry';}
+  catch(e){clearTimeout(to);return 'retry';}
+}
+let flushing=false;
+async function flush(){
+  if(flushing||!queue.length)return;flushing=true;
+  while(queue.length){const res=await send(queue[0]);if(res==='retry')break;queue.shift();saveQ();}
+  flushing=false;setNet(!queue.length||navigator.onLine);
+}
+setInterval(flush,5000);addEventListener('online',flush);
+function setNet(ok){const c=$('chipNet');c.className='chip '+(ok?'ok':'bad');}
+
+async function register(team){
+  const now=Date.now();
+  if(lastSeen[team]&&now-lastSeen[team]<DEDUP_MS){beep('dup');show('dup',`${team}`,'Já registada','Pode seguir');return;}
+  lastSeen[team]=now;
+  const item={d:team,p:point,t:now};
+  show('ok',`${team}`,`Dupla ${team} registada`,'A enviar…');beep('ok');
+  const res=await send(item);
+  if(res==='ok'){addLog(team,'ok','Enviada');$('sub').textContent='Pode seguir';setNet(true);}
+  else if(res==='reject'){addLog(team,'bad','Recusada');beep('bad');show('bad','Erro','Picagem recusada pelo sistema','Usa a picagem manual no portátil');}
+  else{queue.push(item);saveQ();setNet(false);addLog(team,'queued','Na fila');show('queued',`${team}`,`Dupla ${team} guardada`,'Sem internet: envia sozinha quando voltar');}
+}
+
+/* ---- Leitura da chapinha ---- */
+function teamFrom(records){
+  for(const r of records){
+    try{
+      let txt='';
+      if(r.recordType==='url'||r.recordType==='absolute-url'||r.recordType==='text'){
+        txt=new TextDecoder(r.encoding||'utf-8').decode(r.data);
+      }else if(r.data){txt=new TextDecoder().decode(r.data);}
+      let m=txt.match(/[?&]d=(\d{1,2})\b/i)||txt.match(/^\s*d?\s*(\d{1,2})\s*$/i);
+      if(m){const n=+m[1];if(n>=1&&n<=20)return n;}
+    }catch(e){}
+  }
+  return null;
+}
+let reader=null,ctrl=null;
+async function startNfc(){
+  const c=$('chipNfc');
+  try{
+    ctrl=new AbortController();reader=new NDEFReader();
+    await reader.scan({signal:ctrl.signal});
+    c.className='chip ok';
+    reader.onreading=ev=>{
+      const team=teamFrom(ev.message.records||[]);
+      if(!team){beep('bad');addLog(null,'bad','Sem número');show('bad','?','Chapinha sem número de dupla',`Série ${ev.serialNumber||'desconhecida'}. Grava o link com d=1, d=2…`);return;}
+      register(team);
+    };
+    reader.onreadingerror=()=>{beep('dup');show('dup','!','Não li bem','Encosta outra vez, sem mexer');};
+  }catch(e){
+    c.className='chip bad';beep('bad');
+    const denied=e&&e.name==='NotAllowedError';
+    show('bad','NFC',denied?'Sem autorização para o NFC':'Não consegui ligar o NFC',denied?'Nas definições do site no Chrome, permite o NFC e recarrega':'Confirma que o NFC está ligado no telemóvel e carrega em Mudar ponto e Ativar');
+  }
+}
+
+/* ---- Ecrã sempre ligado ---- */
+let wake=null;
+async function keepAwake(){try{if('wakeLock' in navigator&&document.visibilityState==='visible'){wake=await navigator.wakeLock.request('screen');}}catch(e){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!$('reader').hidden){keepAwake();flush();}});
+
+/* ---- Botões ---- */
+$('bGo').addEventListener('click',async()=>{
+  if(!point||!supported)return;
+  unlockAudio();
+  $('setup').hidden=true;$('reader').hidden=false;
+  $('whereTxt').textContent=POINTS.find(p=>p.id===point).name;
+  setNet(navigator.onLine);saveQ();show('idle','Encosta','Encosta a chapinha nas costas do telemóvel','Toque rápido e afasta');
+  keepAwake();await startNfc();flush();
+});
+$('bChange').addEventListener('click',()=>{try{ctrl&&ctrl.abort();}catch(e){}$('reader').hidden=true;$('setup').hidden=false;paintSetup();});
+$('bTest').addEventListener('click',()=>{unlockAudio();beep('ok');});
+})();
+</script>
+</body>
+</html>
