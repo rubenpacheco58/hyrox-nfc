@@ -35,12 +35,15 @@ p{margin:0;line-height:1.45}
 
 /* Configuração */
 #setup{display:flex;flex-direction:column;gap:16px}
-.points{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.points{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}
+.pt b{font-size:1.6rem!important}
 .pt{text-align:left;display:flex;flex-direction:column;gap:2px;padding:12px}
 .pt b{font-family:var(--f-display);font-weight:800;font-size:1.25rem;text-transform:uppercase;line-height:1}
 .pt small{color:var(--muted);font-weight:500;font-size:.78rem}
 .pt.run{background:var(--track);border-color:transparent}
 .pt.run small{color:rgba(255,236,230,.8)}
+.pt.meta{border-color:var(--gold)}
+.pt.meta b{color:var(--gold)}
 .pt[aria-pressed="true"]{outline:3px solid var(--gold);outline-offset:-3px}
 .hint{color:var(--muted);font-size:.9rem}
 .err{background:rgba(229,72,77,.12);border:1px solid var(--bad);border-radius:8px;padding:12px;color:#ffd7d8}
@@ -76,6 +79,27 @@ p{margin:0;line-height:1.45}
 .log .s{font-size:.8rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
 .log .s.ok{color:var(--ok)}.log .s.queued{color:var(--warn)}.log .s.bad{color:var(--bad)}.log .s.dup{color:var(--muted)}
 .foot{display:flex;gap:8px;flex-wrap:wrap}
+.mhead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.manualBtn{width:100%;font-size:1.05rem;padding:14px;border:2px solid var(--gold);color:var(--gold);background:transparent}
+.manualBtn[aria-expanded="true"]{background:var(--gold);color:var(--floor)}
+#manualBox{display:flex;flex-direction:column;gap:10px;background:var(--tile);border:1px solid var(--line);border-radius:12px;padding:12px}
+.when{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.when button{padding:9px 4px;font-size:.88rem}
+.when button[aria-pressed="true"]{background:var(--chalk);color:var(--floor);border-color:var(--chalk)}
+.log li{grid-template-columns:auto minmax(0,1fr) auto auto}
+.log .ux{padding:5px 9px;font-size:.78rem;font-weight:700}
+.log .ux.arm{background:var(--bad);border-color:var(--bad);color:#fff}
+.mhead select{font:inherit;color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:6px;padding:6px 8px}
+.mgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.mbtn{font-family:var(--f-display);font-weight:900;font-size:2.1rem;line-height:1;padding:16px 0;background:var(--tile-hi)}
+.mgrid.dense{grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.mgrid.dense .mbtn{font-size:1.5rem;padding:12px 0}
+.mbtn:active{background:var(--chalk);color:var(--floor)}
+#reader.manual .stage{flex:none;min-height:150px}
+#reader.manual .stage .big{font-size:clamp(3rem,18vw,5.5rem)}
+#reader.manual .pulse{display:none}
+button:disabled{opacity:.45;cursor:default}
+.log .s.undone{color:var(--muted);text-decoration:line-through}
 .foot button{flex:1;padding:10px;font-size:.9rem}
 @media (prefers-reduced-motion:reduce){.pulse::after{animation:none}.stage{transition:none}}
 </style>
@@ -89,7 +113,7 @@ p{margin:0;line-height:1.45}
 
   <section id="setup">
     <div id="unsupported" class="err" hidden>
-      <p><b>Este telemóvel não consegue ler chapinhas nesta página.</b> Precisa de ser Android com NFC, a usar o Google Chrome. Em iPhone não funciona.</p>
+      <p><b>Este telemóvel não lê chapinhas nesta página</b> (precisa de Android com NFC e Google Chrome). Podes usá-lo na mesma em <b>modo manual</b>: tocas no número da dupla quando ela passa.</p>
     </div>
     <div>
       <span class="eyebrow">1 · Onde fica este telemóvel?</span>
@@ -120,8 +144,23 @@ p{margin:0;line-height:1.45}
       <div class="sub" id="sub">Toque rápido e afasta</div>
     </div>
 
+    <button class="manualBtn" id="bManual" type="button" aria-expanded="false" aria-controls="manualBox">Picagem manual</button>
+
+    <div id="manualBox" hidden>
+      <div class="mhead"><span class="eyebrow">1 · Quando picou?</span>
+        <select id="mN" aria-label="Número de duplas"></select></div>
+      <div class="when" id="when">
+        <button type="button" data-off="0" aria-pressed="true">Agora</button>
+        <button type="button" data-off="30" aria-pressed="false">Há 30 s</button>
+        <button type="button" data-off="60" aria-pressed="false">Há 1 min</button>
+        <button type="button" data-off="120" aria-pressed="false">Há 2 min</button>
+      </div>
+      <span class="eyebrow">2 · Toca no número da dupla</span>
+      <div class="mgrid" id="mgrid"></div>
+    </div>
+
     <div>
-      <span class="eyebrow">Últimas leituras neste telemóvel</span>
+      <span class="eyebrow">Últimas picagens neste telemóvel · Desfazer anula (até 5 min)</span>
       <ul class="log" id="log"></ul>
     </div>
 
@@ -137,21 +176,17 @@ p{margin:0;line-height:1.45}
 const FN='https://cxxufzwgkvqlnexabvnf.supabase.co/functions/v1/hyrox-tap';
 const DEDUP_MS=8000;          // a mesma chapinha encostada várias vezes seguidas conta 1 vez
 const POINTS=[
-  {id:'box',name:'Porta da box',sub:'Entrada e saída das estações',run:false},
-  {id:'500m',name:'500 m',sub:'Viragem da corrida',run:true},
-  {id:'ski',name:'SkiErg',sub:'Estação 1',run:false},
-  {id:'sledpush',name:'Sled Push',sub:'Estação 2',run:false},
-  {id:'sledpull',name:'Sled Pull',sub:'Estação 3',run:false},
-  {id:'bbj',name:'Burpee Broad Jumps',sub:'Estação 4',run:false},
-  {id:'row',name:'Rowing',sub:'Estação 5',run:false},
-  {id:'farmers',name:'Farmers Carry',sub:'Estação 6',run:false},
-  {id:'lunges',name:'Sandbag Lunges',sub:'Estação 7',run:false},
-  {id:'wallballs',name:'Wall Balls',sub:'Estação 8',run:false}
+  {id:'box',name:'Entrada da box',sub:'Fim de cada estação (1 a 7)',run:false},
+  {id:'500m',name:'500 m',sub:'Viragem de cada corrida',run:true},
+  {id:'meta',name:'Meta',sub:'Depois do Wall Balls',run:false}
 ];
 const $=id=>document.getElementById(id);
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
 const supported='NDEFReader' in window;
 
+// Pontos de teste: só aparecem quando o link os pede (ex.: ?p=wodA)
+const EXTRA=[{id:'wodA',name:'WOD A',sub:'Teste · picar no fim de cada exercício',run:false},{id:'wodB',name:'WOD B',sub:'Teste · picar no fim de cada exercício',run:true}];
+{const qp=new URLSearchParams(location.search).get('p');const x=EXTRA.find(e=>e.id===qp);if(x)POINTS.push(x);}
 let point=new URLSearchParams(location.search).get('p')||store.get('hx_point')||'';
 if(!POINTS.some(p=>p.id===point)) point='';
 let queue=[];try{queue=JSON.parse(store.get('hx_queue')||'[]')}catch(e){queue=[]}
@@ -161,7 +196,7 @@ let log=[];
 /* ---- Configuração ---- */
 const pts=$('points');
 POINTS.forEach(p=>{
-  const b=document.createElement('button');b.type='button';b.className='pt'+(p.run?' run':'');
+  const b=document.createElement('button');b.type='button';b.className='pt'+(p.run?' run':'')+(p.id==='meta'?' meta':'');
   b.innerHTML=`<b>${p.name}</b><small>${p.sub}</small>`;b.dataset.id=p.id;
   b.addEventListener('click',()=>{point=p.id;store.set('hx_point',point);paintSetup();});
   pts.appendChild(b);
@@ -169,8 +204,9 @@ POINTS.forEach(p=>{
 function paintSetup(){
   pts.querySelectorAll('.pt').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.id===point)));
   const go=$('bGo');
-  if(!supported){go.disabled=true;go.textContent='Leitor indisponível neste telemóvel';$('unsupported').hidden=false;return;}
-  go.disabled=!point;go.textContent=point?`Ativar leitor · ${POINTS.find(p=>p.id===point).name}`:'Escolhe o ponto primeiro';
+  $('unsupported').hidden=supported;
+  const nm=point?POINTS.find(p=>p.id===point).name:'';
+  go.disabled=!point;go.textContent=!point?'Escolhe o ponto primeiro':supported?`Ativar leitor · ${nm}`:`Abrir modo manual · ${nm}`;
 }
 paintSetup();
 
@@ -190,17 +226,21 @@ function beep(kind){
 
 /* ---- Feedback no ecrã ---- */
 let idleT;
+function idleTexts(){return manualOn&&!nfcOn?['Toca','Toca no número da dupla quando ela passa','Confirma o número antes de tocar']:['Encosta','Encosta a chapinha nas costas do telemóvel','Toque rápido e afasta'];}
+function showIdle(){const [b,m,s2]=idleTexts();show('idle',b,m,s2);}
 function show(kind,big,msg,sub){
   const st=$('stage');st.className='stage '+kind;
   $('pulse').hidden=kind!=='idle';$('big').textContent=big;$('msg').textContent=msg;$('sub').textContent=sub||'';
   clearTimeout(idleT);
-  if(kind!=='idle') idleT=setTimeout(()=>show('idle','Encosta','Encosta a chapinha nas costas do telemóvel','Toque rápido e afasta'),kind==='bad'?4000:2200);
+  if(kind!=='idle') idleT=setTimeout(showIdle,kind==='bad'?4000:2200);
 }
-function addLog(team,status,label){
-  const d=new Date();log.unshift({t:d.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),team,status,label});
-  if(log.length>8)log.length=8;
-  $('log').innerHTML=log.map(x=>`<li><span class="t">${x.t}</span><span>${x.team?`Dupla ${x.team}`:'Chapinha'}</span><span class="s ${x.status}">${x.label}</span></li>`).join('');
+function addLog(team,status,label,item){
+  const d=item?new Date(item.t):new Date();const e={t:d.toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit',second:'2-digit'}),team,status,label,item,arm:false};log.unshift(e);
+  if(log.length>15)log.length=15;paintLog();return e;
 }
+function canUndo(x){return x.item&&(x.status==='ok'||x.status==='queued')&&Date.now()-x.item.t<5*60000-5000;}
+function paintLog(){$('log').innerHTML=log.map((x,i)=>`<li><span class="t">${x.t}</span><span>${x.team?`Dupla ${x.team}`:'Chapinha'}</span><span class="s ${x.status}">${x.label}</span>${canUndo(x)?`<button class="ux ${x.arm?'arm':''}" type="button" data-i="${i}">${x.arm?'Confirmar':'Desfazer'}</button>`:'<span></span>'}</li>`).join('');}
+setInterval(paintLog,10000);
 
 /* ---- Envio com fila (se faltar internet, guarda e envia depois) ---- */
 function saveQ(){store.set('hx_queue',JSON.stringify(queue));const c=$('chipQ');c.hidden=!queue.length;c.className='chip'+(queue.length?'':' ok');$('qTxt').textContent=`${queue.length} por enviar`;}
@@ -208,7 +248,8 @@ async function send(item){
   const url=`${FN}?fmt=json&d=${item.d}&p=${encodeURIComponent(item.p)}&t=${item.t}`;
   const ctl=new AbortController();const to=setTimeout(()=>ctl.abort(),6000);
   try{const r=await fetch(url,{cache:'no-store',signal:ctl.signal});clearTimeout(to);
-    if(r.ok)return 'ok'; if(r.status>=400&&r.status<500)return 'reject'; return 'retry';}
+    if(r.ok){try{const j=await r.json();item.id=j.id;}catch(e){}return 'ok';}
+    if(r.status>=400&&r.status<500)return 'reject'; return 'retry';}
   catch(e){clearTimeout(to);return 'retry';}
 }
 let flushing=false;
@@ -220,17 +261,38 @@ async function flush(){
 setInterval(flush,5000);addEventListener('online',flush);
 function setNet(ok){const c=$('chipNet');c.className='chip '+(ok?'ok':'bad');}
 
-async function register(team){
-  const now=Date.now();
-  if(lastSeen[team]&&now-lastSeen[team]<DEDUP_MS){beep('dup');show('dup',`${team}`,'Já registada','Pode seguir');return;}
-  lastSeen[team]=now;
-  const item={d:team,p:point,t:now};
-  show('ok',`${team}`,`Dupla ${team} registada`,'A enviar…');beep('ok');
+async function register(team,manual,offSec){
+  const now=Date.now();offSec=offSec||0;
+  if(!offSec&&lastSeen[team]&&now-lastSeen[team]<DEDUP_MS){beep('dup');show('dup',`${team}`,'Já registada','Pode seguir');return;}
+  if(!offSec)lastSeen[team]=now;
+  const item={d:team,p:point,t:now-offSec*1000};
+  const ago=offSec?(offSec<60?` há ${offSec} s`:` há ${offSec/60} min`):'';
+  show('ok',`${team}`,`Dupla ${team} registada${manual?' (manual)':''}${ago}`,'A enviar…');beep('ok');
   const res=await send(item);
-  if(res==='ok'){addLog(team,'ok','Enviada');$('sub').textContent='Pode seguir';setNet(true);}
-  else if(res==='reject'){addLog(team,'bad','Recusada');beep('bad');show('bad','Erro','Picagem recusada pelo sistema','Usa a picagem manual no portátil');}
-  else{queue.push(item);saveQ();setNet(false);addLog(team,'queued','Na fila');show('queued',`${team}`,`Dupla ${team} guardada`,'Sem internet: envia sozinha quando voltar');}
+  const lab=manual?`Manual${ago}`:'Enviada';
+  if(res==='ok'){addLog(team,'ok',lab,item);$('sub').textContent='Pode seguir';setNet(true);}
+  else if(res==='reject'){addLog(team,'bad','Recusada');beep('bad');show('bad','Erro','Picagem recusada pelo sistema','Tenta outra vez ou usa a picagem manual');}
+  else{queue.push(item);saveQ();setNet(false);addLog(team,'queued','Na fila',item);show('queued',`${team}`,`Dupla ${team} guardada`,'Sem internet: envia sozinha quando voltar');}
 }
+async function undoEntry(e){
+  if(!canUndo(e))return;
+  const qi=queue.indexOf(e.item);
+  let ok=false;
+  if(qi>=0){queue.splice(qi,1);saveQ();ok=true;}
+  else if(e.item.id){
+    try{const r=await fetch(`${FN}?fmt=json&del=${e.item.id}`,{cache:'no-store'});ok=r.ok;}catch(err){ok=false;}
+  }
+  e.arm=false;
+  if(ok){e.status='undone';e.label='Desfeita';lastSeen[e.item.d]=0;beep('dup');show('dup',`${e.item.d}`,`Picagem da dupla ${e.item.d} desfeita`,'Já podes picar a dupla certa');}
+  else{beep('bad');show('bad','Erro','Não consegui desfazer','Confirma a internet e tenta outra vez');}
+  paintLog();
+}
+let armT;
+$('log').addEventListener('click',ev=>{
+  const b=ev.target.closest('.ux');if(!b)return;const e=log[+b.dataset.i];if(!e)return;
+  if(!e.arm){log.forEach(x=>x.arm=false);e.arm=true;paintLog();clearTimeout(armT);armT=setTimeout(()=>{e.arm=false;paintLog();},4000);return;}
+  clearTimeout(armT);undoEntry(e);
+});
 
 /* ---- Leitura da chapinha ---- */
 function teamFrom(records){
@@ -241,7 +303,7 @@ function teamFrom(records){
         txt=new TextDecoder(r.encoding||'utf-8').decode(r.data);
       }else if(r.data){txt=new TextDecoder().decode(r.data);}
       let m=txt.match(/[?&]d=(\d{1,2})\b/i)||txt.match(/^\s*d?\s*(\d{1,2})\s*$/i);
-      if(m){const n=+m[1];if(n>=1&&n<=20)return n;}
+      if(m){const n=+m[1];if(n>=1&&n<=60)return n;}
     }catch(e){}
   }
   return null;
@@ -252,7 +314,7 @@ async function startNfc(){
   try{
     ctrl=new AbortController();reader=new NDEFReader();
     await reader.scan({signal:ctrl.signal});
-    c.className='chip ok';
+    c.className='chip ok';nfcOn=true;
     reader.onreading=ev=>{
       const team=teamFrom(ev.message.records||[]);
       if(!team){beep('bad');addLog(null,'bad','Sem número');show('bad','?','Chapinha sem número de dupla',`Série ${ev.serialNumber||'desconhecida'}. Grava o link com d=1, d=2…`);return;}
@@ -262,6 +324,7 @@ async function startNfc(){
   }catch(e){
     c.className='chip bad';beep('bad');
     const denied=e&&e.name==='NotAllowedError';
+    if(!nfcOn)setManual(true);
     show('bad','NFC',denied?'Sem autorização para o NFC':'Não consegui ligar o NFC',denied?'Nas definições do site no Chrome, permite o NFC e recarrega':'Confirma que o NFC está ligado no telemóvel e carrega em Mudar ponto e Ativar');
   }
 }
@@ -272,15 +335,35 @@ async function keepAwake(){try{if('wakeLock' in navigator&&document.visibilitySt
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!$('reader').hidden){keepAwake();flush();}});
 
 /* ---- Botões ---- */
+/* ---- Modo manual ---- */
+let manualOn=false,nfcOn=false;
+const mN=$('mN');for(let i=1;i<=60;i++){const o=document.createElement('option');o.value=i;o.textContent=`${i} duplas`;mN.appendChild(o);}
+mN.value=Math.min(60,Math.max(1,+store.get('hx_mN')||12));
+function paintGrid(){$('mgrid').classList.toggle('dense',+mN.value>20);$('mgrid').innerHTML=Array.from({length:+mN.value},(_,i)=>`<button class="mbtn" type="button" data-t="${i+1}" aria-label="Picar dupla ${i+1}">${i+1}</button>`).join('');}
+mN.addEventListener('change',()=>{store.set('hx_mN',mN.value);paintGrid();});
+let whenOff=0,closeT;
+function paintWhen(){$('when').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.off===whenOff)));}
+$('when').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;whenOff=+b.dataset.off;paintWhen();keepOpen();});
+$('mgrid').addEventListener('click',e=>{const t=+e.target.dataset.t;if(t){unlockAudio();register(t,true,whenOff);whenOff=0;paintWhen();keepOpen();}});
+function keepOpen(){clearTimeout(closeT);if(nfcOn&&manualOn)closeT=setTimeout(()=>setManual(false),45000);} // com NFC a funcionar, fecha sozinho para ninguém tocar sem querer
+function setManual(on){manualOn=on;$('manualBox').hidden=!on;$('reader').classList.toggle('manual',on);
+  const b=$('bManual');b.setAttribute('aria-expanded',String(on));b.textContent=on?'Fechar picagem manual':'Picagem manual';
+  if(!on){whenOff=0;paintWhen();}keepOpen();showIdle();}
+paintGrid();
+$('bManual').addEventListener('click',()=>setManual(!manualOn));
+
 $('bGo').addEventListener('click',async()=>{
-  if(!point||!supported)return;
+  if(!point)return;
   unlockAudio();
   $('setup').hidden=true;$('reader').hidden=false;
   $('whereTxt').textContent=POINTS.find(p=>p.id===point).name;
-  setNet(navigator.onLine);saveQ();show('idle','Encosta','Encosta a chapinha nas costas do telemóvel','Toque rápido e afasta');
-  keepAwake();await startNfc();flush();
+  setNet(navigator.onLine);saveQ();paintLog();
+  keepAwake();
+  if(supported){setManual(false);await startNfc();}
+  else{const c=$('chipNfc');c.className='chip bad';c.lastElementChild.textContent='Sem NFC';setManual(true);}
+  flush();
 });
-$('bChange').addEventListener('click',()=>{try{ctrl&&ctrl.abort();}catch(e){}$('reader').hidden=true;$('setup').hidden=false;paintSetup();});
+$('bChange').addEventListener('click',()=>{try{ctrl&&ctrl.abort();}catch(e){}nfcOn=false;$('reader').hidden=true;$('setup').hidden=false;paintSetup();});
 $('bTest').addEventListener('click',()=>{unlockAudio();beep('ok');});
 })();
 </script>
