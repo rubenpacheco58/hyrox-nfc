@@ -83,6 +83,10 @@ input[type=search]{font:inherit;color:var(--chalk);background:var(--tile);border
 .muted{color:var(--muted);font-size:.9rem}
 button.ghost{font:inherit;font-weight:600;color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:8px;padding:10px 14px;cursor:pointer;align-self:flex-start}
 .foot{color:var(--muted);font-size:.8rem}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:inherit;font-weight:700;font-size:1rem;color:var(--floor);background:var(--gold);border:0;border-radius:10px;padding:13px 16px;cursor:pointer;flex:1 1 auto;min-height:48px}
+.btn:disabled{opacity:.6;cursor:wait}
+.actions .ghost{align-self:auto;min-height:48px}
 </style>
 </head>
 <body>
@@ -162,6 +166,10 @@ function renderTeam(){
         <div class="place"><span class="eyebrow">${esc(me.category)}</span><b class="num">${posCat}.º <small>de ${inCat.length}</small></b></div>
       </div>
     </section>
+    <div class="actions">
+      <button class="btn" id="bSave" type="button">Descarregar os parciais</button>
+      <button class="ghost" id="bShare" type="button" hidden>Partilhar</button>
+    </div>
     <section style="display:flex;flex-direction:column;gap:10px">
       <h2>Parciais</h2>
       <div class="legend"><span><i style="background:var(--track)"></i>${exact?'Run':'Corrida até aos 500 m'}</span><span><i style="background:var(--chalk)"></i>${exact?'Estação':'Volta + estação'}</span><span><i style="background:var(--ok);width:3px"></i>Melhor da categoria</span></div>
@@ -177,7 +185,83 @@ function renderTeam(){
     </section>
     <a href="${link(0)}">Ver a classificação completa</a>
   </div>`;
+  card={me,pos,total:data.length,posCat,catN:inCat.length,segs,exact};
+  $('bSave').addEventListener('click',saveCard);
+  if(navigator.canShare&&window.File){try{if(navigator.canShare({files:[new File([''],'x.png',{type:'image/png'})]})){$('bShare').hidden=false;$('bShare').addEventListener('click',shareCard);}}catch(e){}}
 }
+
+/* Imagem dos parciais (1080 x 1920, formato story) */
+let card=null;
+function slug(t){return String(t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'dupla';}
+async function makeBlob(){
+  const c=card;if(!c)throw new Error('sem dados');
+  try{await Promise.all(['900 100px "Big Shoulders Display"','800 50px "Big Shoulders Display"','600 30px Archivo','500 30px Archivo','700 30px Archivo'].map(f=>document.fonts.load(f)));}catch(e){}
+  const W=1080,H=1920,X=72,CW=W-2*X;
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const g=cv.getContext('2d');
+  const DS='"Big Shoulders Display","Arial Narrow",Impact,sans-serif',BD='Archivo,system-ui,sans-serif';
+  const col={floor:'#0b1320',tile:'#142034',hi:'#1b2a43',line:'#26375a',chalk:'#eef2f8',muted:'#8e9cb6',track:'#a3463a',soft:'#ffb4a8',gold:'#f2c14e',ok:'#2fbf71'};
+  const sp=v=>{if('letterSpacing' in g)g.letterSpacing=v;};
+  const rr=(x,y,w,h,r)=>{g.beginPath();if(g.roundRect)g.roundRect(x,y,w,h,r);else g.rect(x,y,w,h);g.fill();};
+  const fit=(t,font,size,max)=>{let s=size;do{g.font=font.replace('#',s);if(g.measureText(t).width<=max)break;s-=2;}while(s>20);return s;};
+  g.fillStyle=col.floor;g.fillRect(0,0,W,H);
+  g.fillStyle=col.track;g.fillRect(0,0,W,14);
+  g.textBaseline='alphabetic';
+  // cabeçalho
+  let y=104;
+  g.fillStyle=col.muted;g.font=`600 28px ${BD}`;sp('4px');
+  g.fillText(($('raceTxt').textContent||'Simulação Hyrox').toUpperCase(),X,y);sp('0px');
+  // nome (até 2 linhas)
+  y+=96;g.fillStyle=col.chalk;
+  const name=c.me.name.toUpperCase();let ns=88;g.font=`900 ${ns}px ${DS}`;
+  let lines=[name];
+  if(g.measureText(name).width>CW){const w=name.split(' ');let a='';lines=[];for(const p of w){const t=a?a+' '+p:p;if(g.measureText(t).width>CW&&a){lines.push(a);a=p;}else a=t;}lines.push(a);
+    if(lines.length>2){lines=[lines[0],lines.slice(1).join(' ')];}
+    lines=lines.map(l=>l);ns=Math.min(...lines.map(l=>fit(l,`900 #px ${DS}`,88,CW)));g.font=`900 ${ns}px ${DS}`;}
+  lines.forEach((l,i)=>{g.fillText(l,X,y+i*ns*0.95);});y+=(lines.length-1)*ns*0.95;
+  y+=58;g.fillStyle=col.muted;g.font=`500 34px ${BD}`;g.fillText(`${c.me.category} · Dupla ${D}`,X,y);
+  // tempo final
+  y+=92;g.fillStyle=col.muted;g.font=`600 28px ${BD}`;sp('4px');g.fillText('TEMPO FINAL',X,y);sp('0px');
+  y+=176;g.fillStyle=col.gold;g.font=`900 200px ${DS}`;g.fillText(fmt(c.me.total_secs),X-4,y);
+  // posições
+  y+=40;const bw=(CW-20)/2,bh=128;
+  [['GERAL',c.pos,c.total],[c.me.category.toUpperCase(),c.posCat,c.catN]].forEach(([lab,p,n],i)=>{
+    const bx=X+i*(bw+20);g.fillStyle=col.tile;rr(bx,y,bw,bh,18);
+    g.fillStyle=col.muted;g.font=`600 24px ${BD}`;sp('3px');g.fillText(lab,bx+26,y+44);sp('0px');
+    g.fillStyle=col.chalk;g.font=`800 64px ${DS}`;const t=`${p}.º`;g.fillText(t,bx+26,y+108);
+    const tw=g.measureText(t).width;g.fillStyle=col.muted;g.font=`500 30px ${BD}`;g.fillText(` de ${n}`,bx+26+tw+6,y+106);
+  });
+  y+=bh+76;
+  // parciais
+  g.fillStyle=col.chalk;g.font=`800 48px ${DS}`;sp('1px');g.fillText('PARCIAIS',X,y);sp('0px');
+  g.font=`600 24px ${BD}`;g.textAlign='right';g.fillStyle=col.muted;g.fillText('VS MELHOR DA CATEGORIA',W-X,y);g.textAlign='left';
+  y+=22;
+  const rows=c.segs,bottom=H-96,rh=Math.min(64,(bottom-y)/rows.length);
+  rows.forEach((s,i)=>{
+    const top=y+i*rh,base=top+rh*0.66;
+    if(i)(g.fillStyle=col.line,g.fillRect(X,top,CW,2));
+    g.fillStyle=s.run?col.track:col.chalk;rr(X,top+rh*0.30,8,rh*0.42,3);
+    g.fillStyle=s.run?col.soft:col.chalk;g.font=`600 ${Math.round(rh*0.5)}px ${BD}`;
+    const lab=fit(s.lab,`600 #px ${BD}`,Math.round(rh*0.5),CW*0.56);g.font=`600 ${lab}px ${BD}`;g.fillText(s.lab,X+26,base);
+    g.textAlign='right';
+    if(s.v==null){g.fillStyle=col.muted;g.font=`800 ${Math.round(rh*0.62)}px ${DS}`;g.fillText('·',W-X,base);g.font=`600 ${Math.round(rh*0.36)}px ${BD}`;g.fillText('Sem picagem',W-X-170,base);}
+    else{g.fillStyle=col.chalk;g.font=`800 ${Math.round(rh*0.66)}px ${DS}`;g.fillText(fmt(s.v),W-X,base);
+      const d=s.best!=null?s.v-s.best:null;
+      if(d!=null){g.font=`600 ${Math.round(rh*0.36)}px ${BD}`;if(d<=0){g.fillStyle=col.ok;g.fillText('Melhor',W-X-170,base);}else{g.fillStyle=col.muted;g.fillText('+'+fmt(d),W-X-170,base);}}}
+    g.textAlign='left';
+  });
+  // rodapé
+  g.fillStyle=col.muted;g.font=`500 26px ${BD}`;
+  g.fillText(c.exact?'Run: da saída da box à entrada seguinte · Estação: da entrada à saída':'Parciais entre picagens',X,H-48);
+  return await new Promise((ok,ko)=>cv.toBlob(b=>b?ok(b):ko(new Error('toBlob')),'image/png'));
+}
+async function withBusy(btn,txt,fn){const o=btn.textContent;btn.disabled=true;btn.textContent=txt;try{await fn();}catch(e){if(e&&e.name!=='AbortError')alertBox('Não consegui criar a imagem. Tenta outra vez.');}finally{btn.disabled=false;btn.textContent=o;}}
+function alertBox(m){const p=document.createElement('p');p.className='muted';p.textContent=m;$('bSave').closest('.actions').after(p);setTimeout(()=>p.remove(),5000);}
+function fileName(){return `parciais-hyrox-${slug(card.me.name)}.png`;}
+function saveCard(){withBusy($('bSave'),'A preparar a imagem…',async()=>{
+  const b=await makeBlob();const u=URL.createObjectURL(b);const a=document.createElement('a');a.href=u;a.download=fileName();document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),4000);});}
+function shareCard(){withBusy($('bShare'),'A preparar…',async()=>{
+  const b=await makeBlob();const f=new File([b],fileName(),{type:'image/png'});
+  await navigator.share({files:[f],title:'Os meus parciais Hyrox',text:`${card.me.name}: ${fmt(card.me.total_secs)}`});});}
 
 /* Classificação */
 function renderList(){
