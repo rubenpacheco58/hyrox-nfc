@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1320">
+<title>Parciais Hyrox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Página do atleta: telemóvel primeiro. Resultado da dupla em cima, parciais por segmento em baixo; sem ?d= mostra a classificação. */
+:root{
+  --floor:#0b1320; --tile:#142034; --tile-hi:#1b2a43; --line:#26375a;
+  --chalk:#eef2f8; --muted:#8e9cb6; --track:#a3463a; --track-soft:#ffb4a8;
+  --gold:#f2c14e; --ok:#2fbf71; --warn:#f0a43a;
+  --f-display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
+  --f-body:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--floor);color:var(--chalk);font-family:var(--f-body);font-size:16px;line-height:1.4;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:18px;padding-block:18px 32px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+a{color:var(--gold)}
+a:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.eyebrow{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{margin:0;font-family:var(--f-display);font-weight:900;text-transform:uppercase;line-height:.95;font-size:2.4rem;text-wrap:balance}
+h1 span{color:var(--gold)}
+h2{margin:0;font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-size:1.4rem;letter-spacing:.02em}
+.num{font-variant-numeric:tabular-nums}
+
+/* Cartão da dupla */
+.hero{display:flex;flex-direction:column;gap:14px;background:var(--tile);border-radius:14px;padding:18px}
+.who{display:flex;align-items:center;gap:12px}
+.badge{flex:none;width:52px;height:52px;border-radius:50%;background:var(--gold);color:var(--floor);display:grid;place-items:center;font-family:var(--f-display);font-weight:900;font-size:1.6rem}
+.who b{display:block;font-size:1.25rem;line-height:1.15}
+.who small{color:var(--muted)}
+.total{font-family:var(--f-display);font-weight:900;font-size:clamp(3.6rem,20vw,6rem);line-height:.85;font-variant-numeric:tabular-nums}
+.places{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.place{background:var(--tile-hi);border-radius:10px;padding:10px 12px}
+.place b{display:block;font-family:var(--f-display);font-weight:800;font-size:1.9rem;line-height:1}
+.place b small{font-family:var(--f-body);font-size:.9rem;font-weight:500;color:var(--muted)}
+
+/* Parciais */
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.segs{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.seg{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 12px;padding:9px 0;border-top:1px solid var(--line)}
+.seg:first-child{border-top:0}
+.seg .lab{font-weight:600;min-width:0}
+.seg .lab small{display:block;font-weight:500;color:var(--muted);font-size:.8rem}
+.seg .t{font-family:var(--f-display);font-weight:800;font-size:1.45rem;line-height:1;text-align:right;font-variant-numeric:tabular-nums}
+.seg .t small{display:block;font-family:var(--f-body);font-size:.75rem;font-weight:600;color:var(--muted);margin-top:3px}
+.seg .t small.best{color:var(--ok)}
+.bar{grid-column:1/-1;height:6px;border-radius:3px;background:var(--tile-hi);position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;border-radius:3px;background:var(--chalk)}
+.bar em{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ok)}
+.seg.run .lab{color:var(--track-soft)}
+.seg.run .bar i{background:var(--track)}
+.seg.miss .t{color:var(--muted)}
+
+/* Classificação */
+.filters{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:inherit;font-size:.85rem;font-weight:600;color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:999px;padding:6px 12px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--gold);color:var(--floor);border-color:var(--gold)}
+input[type=search]{font:inherit;color:var(--chalk);background:var(--tile);border:1px solid var(--line);border-radius:8px;padding:10px 12px;width:100%}
+.rows{list-style:none;margin:0;padding:0}
+.rows a{display:grid;grid-template-columns:2.2em minmax(0,1fr) auto;gap:10px;align-items:center;padding:11px 4px;border-top:1px solid var(--line);color:var(--chalk);text-decoration:none}
+.rows li:first-child a{border-top:0}
+.rows a:hover{background:var(--tile)}
+.rows .p{font-family:var(--f-display);font-weight:800;font-size:1.3rem;color:var(--muted)}
+.rows li:first-child .p{color:var(--gold)}
+.rows .n{min-width:0}
+.rows .n b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rows .n small{color:var(--muted)}
+.rows .tt{font-family:var(--f-display);font-weight:800;font-size:1.3rem;font-variant-numeric:tabular-nums}
+.empty{background:var(--tile);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:10px}
+.empty b{font-size:1.1rem}
+.muted{color:var(--muted);font-size:.9rem}
+button.ghost{font:inherit;font-weight:600;color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:8px;padding:10px 14px;cursor:pointer;align-self:flex-start}
+.foot{color:var(--muted);font-size:.8rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow" id="raceTxt">Simulação Hyrox · duplas</span>
+    <h1>Os teus <span>parciais</span></h1>
+  </header>
+
+  <main id="main">
+    <p class="muted">A carregar resultados…</p>
+  </main>
+
+  <p class="foot" id="foot"></p>
+</div>
+
+<script>
+(function(){
+const SB_URL='https://cxxufzwgkvqlnexabvnf.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4eHVmendna3ZxbG5leGFidm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4MDUxMDQsImV4cCI6MjEwOTM4MTEwNH0.XrTcailh4rHK-IxN6IdFaNNRiTHrRJ5LBfM9Zyt2q7I';
+const ST=['SkiErg','Sled Push','Sled Pull','Burpee Broad Jumps','Rowing','Farmers Carry','Sandbag Lunges','Wall Balls'];
+const $=id=>document.getElementById(id);
+const qs=new URLSearchParams(location.search);
+const D=Math.max(0,Math.min(60,parseInt(qs.get('d'),10)||0));
+let R=(qs.get('r')||'').replace(/[^a-z0-9]/gi,'').slice(0,40);
+let cat='Todas',query='',data=[];
+
+function fmt(s){if(s==null)return'·';s=Math.max(0,Math.round(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;const p=n=>String(n).padStart(2,'0');return h?`${h}:${p(m)}:${p(x)}`:`${m}:${p(x)}`;}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+async function api(path){
+  const r=await fetch(`${SB_URL}/rest/v1/${path}`,{headers:{apikey:SB_KEY,Authorization:`Bearer ${SB_KEY}`},cache:'no-store'});
+  if(!r.ok)throw new Error('HTTP '+r.status);return r.json();
+}
+function link(d){const p=new URLSearchParams();if(d)p.set('d',d);if(R)p.set('r',R);const s=p.toString();return s?`?${s}`:location.pathname;}
+
+async function load(){
+  try{
+    if(!R){const last=await api('hyrox_sim_results?select=race_id&order=created_at.desc&limit=1');R=last[0]?.race_id||'';}
+    data=R?await api(`hyrox_sim_results?select=team,name,category,total_secs,splits,created_at&race_id=eq.${encodeURIComponent(R)}&order=total_secs.asc&limit=200`):[];
+    if(data.length)$('raceTxt').textContent=`Simulação Hyrox · ${new Date(data[0].created_at).toLocaleDateString('pt-PT',{day:'numeric',month:'long',year:'numeric'})}`;
+    $('foot').textContent=`Atualizado às ${new Date().toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit'})}. A página atualiza sozinha enquanto a prova decorre.`;
+    D?renderTeam():renderList();
+  }catch(e){
+    $('main').innerHTML=`<div class="empty"><b>Não consegui carregar os resultados.</b><span class="muted">Confirma a ligação à internet e tenta outra vez.</span><button class="ghost" id="retry" type="button">Tentar outra vez</button></div>`;
+    $('retry').addEventListener('click',load);
+  }
+}
+
+/* Uma dupla */
+function renderTeam(){
+  const me=data.find(r=>r.team===D);
+  if(!me){
+    $('main').innerHTML=`<div class="empty"><b>A dupla ${D} ainda não tem resultado.</b>
+      <span class="muted">Os parciais aparecem aqui assim que o capitão picar na meta. Se já terminaram, espera um minuto e atualiza.</span>
+      <button class="ghost" id="retry" type="button">Atualizar</button>
+      ${data.length?`<a href="${link(0)}">Ver a classificação</a>`:''}</div>`;
+    $('retry').addEventListener('click',load);return;
+  }
+  const pos=data.indexOf(me)+1;
+  const inCat=data.filter(r=>r.category===me.category);const posCat=inCat.indexOf(me)+1;
+  // melhor e mais lento de cada segmento na categoria da dupla
+  const segs=[];
+  for(let k=0;k<8;k++){segs.push({run:true,k,lab:`Run ${k+1} · até aos 500 m`,sub:'Ida',key:'ida'});segs.push({run:false,k,lab:k===7?'Volta + Wall Balls':`Volta + ${ST[k]}`,sub:k===7?'Até à meta':'Até à picagem na box',key:'resto'});}
+  segs.forEach(s=>{const vals=inCat.map(r=>r.splits?.[s.k]?.[s.key]).filter(v=>v!=null);s.best=vals.length?Math.min(...vals):null;s.max=vals.length?Math.max(...vals):null;s.v=me.splits?.[s.k]?.[s.key]??null;});
+  const scale=Math.max(...segs.map(s=>s.max||0),1);
+  $('main').innerHTML=`
+  <div style="display:flex;flex-direction:column;gap:18px">
+    <section class="hero">
+      <div class="who"><span class="badge">${D}</span><div><b>${esc(me.name)}</b><small>${esc(me.category)}</small></div></div>
+      <div><span class="eyebrow">Tempo final</span><div class="total">${fmt(me.total_secs)}</div></div>
+      <div class="places">
+        <div class="place"><span class="eyebrow">Geral</span><b class="num">${pos}.º <small>de ${data.length}</small></b></div>
+        <div class="place"><span class="eyebrow">${esc(me.category)}</span><b class="num">${posCat}.º <small>de ${inCat.length}</small></b></div>
+      </div>
+    </section>
+    <section style="display:flex;flex-direction:column;gap:10px">
+      <h2>Parciais</h2>
+      <div class="legend"><span><i style="background:var(--track)"></i>Corrida até aos 500 m</span><span><i style="background:var(--chalk)"></i>Volta + estação</span><span><i style="background:var(--ok);width:3px"></i>Melhor da categoria</span></div>
+      <ol class="segs">${segs.map(s=>{
+        const miss=s.v==null;const diff=!miss&&s.best!=null?s.v-s.best:null;
+        const note=miss?'Sem picagem':diff<=0?'<small class="best">Melhor da categoria</small>':`<small>+${fmt(diff)} do melhor</small>`;
+        return `<li class="seg ${s.run?'run':''} ${miss?'miss':''}">
+          <span class="lab">${esc(s.lab)}<small>${s.sub}</small></span>
+          <span class="t">${miss?'·':fmt(s.v)}${miss?'<small>Sem picagem</small>':note}</span>
+          <span class="bar" aria-hidden="true">${miss?'':`<i style="width:${(s.v/scale*100).toFixed(1)}%"></i>`}${s.best!=null?`<em style="left:${(s.best/scale*100).toFixed(1)}%"></em>`:''}</span>
+        </li>`;}).join('')}</ol>
+      <p class="muted">Cada parcial vai de uma picagem à seguinte. A "volta + estação" junta o regresso da corrida, a roxzone e a estação, porque só se pica no fim de cada estação.</p>
+    </section>
+    <a href="${link(0)}">Ver a classificação completa</a>
+  </div>`;
+}
+
+/* Classificação */
+function renderList(){
+  if(!data.length){$('main').innerHTML=`<div class="empty"><b>Ainda não há resultados.</b><span class="muted">A classificação aparece aqui quando a primeira dupla cortar a meta.</span><button class="ghost" id="retry" type="button">Atualizar</button></div>`;$('retry').addEventListener('click',load);return;}
+  const cats=['Todas',...new Set(data.map(r=>r.category))];
+  if(!cats.includes(cat))cat='Todas';
+  const q=query.trim().toLowerCase();
+  const rows=data.filter(r=>cat==='Todas'||r.category===cat);
+  const shown=rows.map((r,i)=>({r,p:i+1})).filter(x=>!q||x.r.name.toLowerCase().includes(q)||String(x.r.team)===q);
+  const had=document.activeElement&&document.activeElement.id==='q';
+  $('main').innerHTML=`
+  <div style="display:flex;flex-direction:column;gap:14px">
+    <h2>Classificação</h2>
+    <div class="filters">${cats.map(c=>`<button class="chip" type="button" data-c="${esc(c)}" aria-pressed="${c===cat}">${esc(c)}</button>`).join('')}</div>
+    <input type="search" id="q" placeholder="Procura o nome ou o número da dupla" value="${esc(query)}" aria-label="Procurar dupla">
+    <ol class="rows">${shown.map(({r,p})=>`<li><a href="${link(r.team)}"><span class="p num">${p}</span><span class="n"><b>${esc(r.name)}</b><small>Dupla ${r.team} · ${esc(r.category)}</small></span><span class="tt">${fmt(r.total_secs)}</span></a></li>`).join('')||'<li class="muted" style="padding:10px 0">Nenhuma dupla com esse nome ou número.</li>'}</ol>
+    <p class="muted">Toca numa dupla para ver os parciais.</p>
+  </div>`;
+  document.querySelectorAll('.chip').forEach(b=>b.addEventListener('click',()=>{cat=b.dataset.c;renderList();}));
+  const inp=$('q');inp.addEventListener('input',()=>{query=inp.value;renderList();});
+  if(had){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}
+}
+
+load();
+setInterval(()=>{if(document.visibilityState==='visible'&&!(document.activeElement&&document.activeElement.id==='q'))load();},30000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')load();});
+})();
+</script>
+</body>
+</html>

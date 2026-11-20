@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1320">
+<title>Gravar Chapinhas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Ferramenta de bancada: estado da gravação fixo no topo, lista das duplas por heat em baixo */
+:root{
+  --floor:#0b1320; --tile:#142034; --tile-hi:#1b2a43; --line:#26375a;
+  --chalk:#eef2f8; --muted:#8e9cb6; --gold:#f2c14e; --ok:#2fbf71; --warn:#f0a43a; --bad:#e5484d;
+  --masc:#4cc9f0; --mista:#9b5de5; --fem:#f72585;
+  --f-display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
+  --f-body:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--floor);color:var(--chalk);font-family:var(--f-body);font-size:16px;line-height:1.4;padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding-block:16px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.eyebrow{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{margin:0;font-family:var(--f-display);font-weight:900;text-transform:uppercase;line-height:.95;font-size:2.3rem}
+h1 span{color:var(--gold)}
+button{font:inherit;font-weight:700;color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:8px;padding:9px 12px;cursor:pointer}
+button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button:disabled{opacity:.45;cursor:default}
+button.primary{background:var(--gold);color:var(--floor);border-color:var(--gold)}
+p{margin:0}
+.muted{color:var(--muted);font-size:.9rem}
+.err{background:rgba(229,72,77,.12);border:1px solid var(--bad);border-radius:10px;padding:12px;color:#ffd7d8}
+
+/* Estado fixo no topo */
+.dock{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--floor);padding-block:6px;display:flex;flex-direction:column;gap:8px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--floor)}
+.stage{border-radius:14px;padding:14px 16px;background:var(--tile);border:2px dashed var(--line);display:flex;flex-direction:column;gap:4px;min-height:118px;justify-content:center}
+.stage .big{font-family:var(--f-display);font-weight:900;font-size:2rem;line-height:1;text-transform:uppercase}
+.stage .sub{font-size:.92rem;color:var(--muted)}
+.stage.wait{border:2px solid var(--gold)}
+.stage.wait .big{color:var(--gold)}
+.stage.ok{background:var(--ok);border:2px solid var(--ok);color:#06210f}
+.stage.ok .sub{color:#0b3a1d}
+.stage.bad{background:var(--bad);border:2px solid var(--bad);color:#fff}
+.stage.bad .sub{color:#ffe1e2}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.prog{flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px}
+.track{height:8px;border-radius:4px;background:var(--tile-hi);overflow:hidden}
+.track i{display:block;height:100%;background:var(--ok);transition:width .3s}
+
+/* Lista */
+.heat{display:flex;flex-direction:column;gap:6px}
+.hh{display:flex;align-items:baseline;gap:10px;padding-top:6px}
+.hh b{font-family:var(--f-display);font-weight:900;font-size:1.4rem;line-height:1}
+.hh .cat{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c)}
+.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--tile);border-radius:10px;padding:10px 12px;border-left:4px solid var(--c)}
+.row.cur{outline:2px solid var(--gold)}
+.num{width:38px;height:38px;border-radius:50%;background:var(--c);color:var(--floor);display:grid;place-items:center;font-family:var(--f-display);font-weight:900;font-size:1.25rem}
+.row .nm{min-width:0}
+.row .nm b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .nm small{color:var(--muted);font-size:.78rem}
+.row .nm small.done{color:var(--ok);font-weight:700}
+.acts{display:flex;gap:6px}
+.acts button{padding:8px 10px;font-size:.85rem}
+.acts .copy{background:transparent}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="eyebrow">Simulação Hyrox · preparação</span>
+    <h1>Gravar <span>chapinhas</span></h1>
+  </header>
+
+  <div id="unsupported" class="err" hidden><p><b>Este telemóvel não consegue gravar chapinhas nesta página</b> (precisa de Android com NFC e Google Chrome). Podes usar o botão "Copiar link" de cada dupla e gravar na app NFC Tools.</p></div>
+
+  <div class="dock">
+    <div class="stage" id="stage" role="status" aria-live="assertive">
+      <div class="big" id="big">Escolhe uma dupla</div>
+      <div class="sub" id="sub">Carrega em "Gravar" na dupla e encosta a chapinha nas costas do telemóvel.</div>
+    </div>
+    <div class="bar">
+      <div class="prog"><span class="eyebrow" id="progTxt">0 de 0 gravadas</span><div class="track"><i id="progBar" style="width:0%"></i></div></div>
+      <button id="bCheck" type="button">Verificar chapinha</button>
+      <button id="bCancel" type="button" hidden>Cancelar</button>
+    </div>
+  </div>
+
+  <p class="muted">Cada chapinha fica com o link dos parciais da sua dupla. Os leitores da prova leem o número da dupla nesse link, e um atleta que encoste a pulseira ao próprio telemóvel vê os seus resultados. Grava com a chapinha já dentro da peça impressa, para confirmar que lê através do PLA.</p>
+
+  <main id="list"><p class="muted">A carregar duplas…</p></main>
+</div>
+
+<script>
+(function(){
+const SB_URL='https://cxxufzwgkvqlnexabvnf.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4eHVmendna3ZxbG5leGFidm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4MDUxMDQsImV4cCI6MjEwOTM4MTEwNH0.XrTcailh4rHK-IxN6IdFaNNRiTHrRJ5LBfM9Zyt2q7I';
+const BASE='https://rubenpacheco58.github.io/hyrox-nfc/resultados.html?d=';
+const CAT={'Dupla Masculina':'var(--masc)','Dupla Mista':'var(--mista)','Dupla Feminina':'var(--fem)'};
+const $=id=>document.getElementById(id);
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const supported='NDEFReader' in window;
+let teams=[],done={};try{done=JSON.parse(store.get('hx_written')||'{}')}catch(e){done={}}
+let ctrl=null,busy=false,cur=null;
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function link(t){return BASE+t;}
+
+let ac=null;
+function beep(ok){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume();const n=ac.currentTime;(ok?[[1046,0,.12],[1568,.11,.16]]:[[220,0,.35]]).forEach(([f,s,d])=>{const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.frequency.value=f;g.gain.setValueAtTime(.0001,n+s);g.gain.exponentialRampToValueAtTime(.25,n+s+.01);g.gain.exponentialRampToValueAtTime(.0001,n+s+d);o.connect(g).connect(ac.destination);o.start(n+s);o.stop(n+s+d+.02);});}catch(e){}
+  try{navigator.vibrate&&navigator.vibrate(ok?120:[200,80,200]);}catch(e){}}
+function show(kind,big,sub){const s=$('stage');s.className='stage '+(kind||'');$('big').textContent=big;$('sub').textContent=sub||'';}
+
+async function load(){
+  try{
+    const r=await fetch(`${SB_URL}/rest/v1/hyrox_sim_teams?select=team,name,category,heat,heat_time&order=team.asc`,{headers:{apikey:SB_KEY,Authorization:`Bearer ${SB_KEY}`},cache:'no-store'});
+    if(!r.ok)throw 0;teams=await r.json();paint();
+  }catch(e){$('list').innerHTML='<div class="err"><p><b>Não consegui carregar as duplas.</b> Confirma a internet e recarrega a página.</p></div>';}
+}
+function paint(){
+  const heats=[...new Set(teams.map(t=>t.heat))];
+  $('list').innerHTML=heats.map(h=>{const ts=teams.filter(t=>t.heat===h);const c=CAT[ts[0].category]||'var(--gold)';
+    return `<section class="heat"><div class="hh" style="--c:${c}"><b>H${h} · ${esc(ts[0].heat_time)}</b><span class="cat">${esc(ts[0].category)}</span></div>
+      ${ts.map(t=>`<div class="row ${cur===t.team?'cur':''}" id="r${t.team}" style="--c:${CAT[t.category]||'var(--gold)'}"><span class="num">${t.team}</span>
+        <span class="nm"><b>${esc(t.name)}</b><small class="${done[t.team]?'done':''}">${done[t.team]?'Gravada ✓':'Por gravar'}</small></span>
+        <span class="acts">${supported?`<button class="primary" type="button" data-w="${t.team}">Gravar</button>`:''}<button class="copy" type="button" data-c="${t.team}">Copiar link</button></span></div>`).join('')}</section>`;}).join('');
+  const n=Object.keys(done).filter(k=>teams.some(t=>t.team===+k)).length;
+  $('progTxt').textContent=`${n} de ${teams.length} gravadas`;$('progBar').style.width=(teams.length?n/teams.length*100:0)+'%';
+}
+function stop(){try{ctrl&&ctrl.abort();}catch(e){}ctrl=null;busy=false;$('bCancel').hidden=true;}
+
+async function write(team){
+  const t=teams.find(x=>x.team===team);if(!t||busy)return;
+  stop();busy=true;cur=team;paint();$('bCancel').hidden=false;
+  show('wait',`#${t.team} ${t.name}`,'Encosta agora a chapinha nas costas do telemóvel e mantém-na parada.');
+  ctrl=new AbortController();const to=setTimeout(()=>{try{ctrl.abort();}catch(e){}},30000);
+  try{
+    const w=new NDEFReader();
+    await w.write({records:[{recordType:'url',data:link(team)}]},{signal:ctrl.signal,overwrite:true});
+    clearTimeout(to);done[team]=Date.now();store.set('hx_written',JSON.stringify(done));beep(true);
+    const next=teams.find(x=>x.team>team&&!done[x.team]);
+    show('ok',`#${t.team} ${t.name} gravada`,next?`Próxima: #${next.team} ${next.name}. Carrega em Gravar nessa dupla.`:'Todas as duplas da lista estão gravadas.');
+    cur=next?next.team:null;busy=false;$('bCancel').hidden=true;paint();
+    if(next){const el=$('r'+next.team);el&&el.scrollIntoView({block:'center',behavior:'smooth'});}
+  }catch(e){
+    clearTimeout(to);busy=false;$('bCancel').hidden=true;
+    if(e&&e.name==='AbortError'){show('','Gravação cancelada','Carrega em Gravar para tentar outra vez.');return;}
+    beep(false);
+    const denied=e&&e.name==='NotAllowedError';
+    show('bad','Não gravou',denied?'O Chrome não tem autorização para usar o NFC. Permite nas definições do site e tenta outra vez.':'Encosta outra vez e não mexas até ouvir o bip. Se continuar a falhar, a chapinha pode estar bloqueada ou o PLA é demasiado grosso.');
+  }
+}
+async function check(){
+  stop();busy=true;$('bCancel').hidden=false;show('wait','Verificar','Encosta uma chapinha para ver a que dupla pertence.');
+  ctrl=new AbortController();
+  try{
+    const r=new NDEFReader();await r.scan({signal:ctrl.signal});
+    r.onreading=ev=>{
+      let n=null;for(const rec of ev.message.records||[]){try{const txt=new TextDecoder(rec.encoding||'utf-8').decode(rec.data);const m=txt.match(/[?&]d=(\d{1,2})\b/);if(m){n=+m[1];break;}}catch(e){}}
+      const t=teams.find(x=>x.team===n);
+      if(t){beep(true);show('ok',`#${t.team} ${t.name}`,`H${t.heat} · ${t.heat_time} · ${t.category}. Encosta outra para verificar.`);}
+      else{beep(false);show('bad','Chapinha sem dupla',n?`Tem o número ${n}, que não está na lista.`:'Está vazia ou tem outro conteúdo. Grava-a com uma dupla.');}
+    };
+    r.onreadingerror=()=>{beep(false);show('bad','Não li bem','Encosta outra vez, sem mexer.');};
+  }catch(e){busy=false;$('bCancel').hidden=true;show('bad','NFC indisponível','Confirma que o NFC está ligado e que o Chrome tem autorização.');}
+}
+$('list').addEventListener('click',async e=>{
+  const w=e.target.closest('[data-w]');if(w){write(+w.dataset.w);return;}
+  const c=e.target.closest('[data-c]');if(c){const url=link(+c.dataset.c);
+    try{await navigator.clipboard.writeText(url);c.textContent='Copiado ✓';setTimeout(()=>{c.textContent='Copiar link';},1500);}
+    catch(err){show('',`Link da dupla ${c.dataset.c}`,url);}}
+});
+$('bCheck').addEventListener('click',check);
+$('bCancel').addEventListener('click',()=>{stop();show('','Escolhe uma dupla','Carrega em "Gravar" na dupla e encosta a chapinha.');});
+if(!supported){$('unsupported').hidden=false;$('bCheck').hidden=true;}
+load();
+})();
+</script>
+</body>
+</html>
