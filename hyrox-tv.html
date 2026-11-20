@@ -1,182 +1,719 @@
-<!doctype html>
-<html lang="pt">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0b1320">
-<title>Gravar Chapinhas</title>
+<!doctype html><html lang="pt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Simulação Hyrox · TV</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-/* Ferramenta de bancada: estado da gravação fixo no topo, lista das duplas por heat em baixo */
+/* Layout: anel de 18 casas (grelha 4x7) tipo tabuleiro a ocupar a TV; classificação e picagens no centro do anel */
 :root{
-  --floor:#0b1320; --tile:#142034; --tile-hi:#1b2a43; --line:#26375a;
-  --chalk:#eef2f8; --muted:#8e9cb6; --gold:#f2c14e; --ok:#2fbf71; --warn:#f0a43a; --bad:#e5484d;
-  --masc:#4cc9f0; --mista:#9b5de5; --fem:#f72585;
+  --floor:#0b1320;      /* chão de borracha */
+  --tile:#142034;
+  --tile-hi:#1b2a43;
+  --line:#26375a;
+  --chalk:#eef2f8;      /* fita/giz */
+  --muted:#8e9cb6;
+  --track:#a3463a;      /* tartan da pista */
+  --track-lo:#8a392f;
+  --gold:#f2c14e;
+  --ok:#4fd18b;
+  --warn:#f0a43a;
+  --live:#ff4d5e;
   --f-display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
   --f-body:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --tok:clamp(22px,3.1vh,36px);
   color-scheme:dark;
 }
 *{box-sizing:border-box}
-[hidden]{display:none!important}
-html,body{margin:0}
-body{background:var(--floor);color:var(--chalk);font-family:var(--f-body);font-size:16px;line-height:1.4;padding-bottom:env(safe-area-inset-bottom,0px)}
-.wrap{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:14px;padding-block:16px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.eyebrow{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
-h1{margin:0;font-family:var(--f-display);font-weight:900;text-transform:uppercase;line-height:.95;font-size:2.3rem}
+html{height:100%}
+body{height:100%;background:var(--floor);color:var(--chalk);font-family:var(--f-body);font-size:clamp(13px,1.45vh,17px)}
+.app{height:100%;display:flex;flex-direction:column;gap:10px;padding-block:12px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* Cabeçalho */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;gap:2px;min-width:0}
+.eyebrow{font-size:.78em;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{margin:0;font-family:var(--f-display);font-weight:900;font-size:clamp(28px,4.6vh,56px);line-height:.95;letter-spacing:.01em;text-transform:uppercase;text-wrap:balance}
 h1 span{color:var(--gold)}
-button{font:inherit;font-weight:700;color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:8px;padding:9px 12px;cursor:pointer}
+.status{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.counts{display:flex;gap:16px;color:var(--muted);font-size:.95em}
+.counts b{color:var(--chalk);font-family:var(--f-display);font-size:1.5em;font-weight:800;font-variant-numeric:tabular-nums}
+.live{display:inline-flex;align-items:center;gap:8px;padding:4px 10px;border-radius:999px;border:1px solid var(--line);font-weight:700;font-size:.8em;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.live i{width:9px;height:9px;border-radius:50%;background:var(--muted)}
+.live.on{color:var(--chalk);border-color:var(--live)}
+.live.on i{background:var(--live);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.25}}
+.clock{font-family:var(--f-display);font-weight:800;font-size:clamp(36px,6.4vh,80px);line-height:.9;font-variant-numeric:tabular-nums;letter-spacing:.02em}
+
+/* Tabuleiro */
+.board{position:relative;flex:1;min-height:0;display:grid;gap:6px;
+  grid-template-columns:repeat(7,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr))}
+.tile{grid-row:var(--r);grid-column:var(--c);position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;
+  border-radius:6px;background:var(--tile);overflow:hidden;
+  background-image:radial-gradient(rgba(255,255,255,.035) 1px,transparent 1.5px);background-size:7px 7px}
+.t-head{display:flex;flex-direction:column;gap:1px;padding:8px 10px 4px}
+.t-name{font-family:var(--f-display);font-weight:800;font-size:clamp(15px,2.5vh,31px);line-height:1;text-transform:uppercase;text-wrap:balance}
+.t-std{font-size:.82em;color:var(--muted);font-variant-numeric:tabular-nums}
+.tile .eyebrow{font-size:.68em}
+.zone{position:relative;flex:1;min-height:0}
+.zl{position:absolute;left:8px;bottom:5px;font-size:.62em;letter-spacing:.14em;text-transform:uppercase;color:rgba(238,242,248,.55);font-weight:700}
+
+/* Run: pista de tartan com linhas de pista, ida | 500 m | volta */
+.t-run{background-color:var(--track);
+  background-image:repeating-linear-gradient(180deg,transparent 0 17px,rgba(255,255,255,.14) 17px 18px)}
+.t-run .t-std,.t-run .eyebrow{color:rgba(255,236,230,.75)}
+.zones{flex:1;display:flex;min-height:0}
+.zones .zone{flex:1}
+.mid{position:relative;width:0;border-left:2px dashed rgba(255,255,255,.7)}
+.mid span{position:absolute;top:0;left:50%;transform:translateX(-50%);background:var(--chalk);color:var(--track-lo);font-weight:800;font-size:.62em;padding:1px 5px;border-radius:3px;white-space:nowrap;letter-spacing:.04em}
+
+/* Estação: chão de borracha, nome grande */
+.t-st{background-color:var(--tile-hi)}
+.t-st .t-head{border-bottom:1px solid var(--line)}
+.t-start{background-color:var(--tile);border:2px solid var(--chalk)}
+.t-finish{background-color:var(--tile);border:2px solid var(--gold)}
+.t-finish::after{content:"";position:absolute;left:0;right:0;bottom:0;height:12px;opacity:.85;
+  background:conic-gradient(var(--chalk) 25%,var(--floor) 0 50%,var(--chalk) 0 75%,var(--floor) 0) 0 0/12px 12px}
+.t-finish .t-name{color:var(--gold)}
+.tile.ping{animation:ping .9s ease-out}
+@keyframes ping{0%{box-shadow:inset 0 0 0 4px var(--chalk)}100%{box-shadow:inset 0 0 0 4px transparent}}
+
+/* Centro do anel */
+.center{grid-row:2/4;grid-column:2/7;display:grid;grid-template-columns:minmax(0,1.65fr) minmax(0,1fr);gap:6px;min-height:0}
+.panel{background:rgba(20,32,52,.75);border:1px solid var(--line);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-height:0;min-width:0;overflow:hidden}
+.panel h2{margin:0;font-family:var(--f-display);font-weight:800;font-size:clamp(16px,2.3vh,28px);text-transform:uppercase;letter-spacing:.03em;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.panel h2 small{font-family:var(--f-body);font-weight:500;font-size:.5em;letter-spacing:.1em;color:var(--muted)}
+.lb-wrap{flex:1;min-height:0;overflow:auto}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{text-align:left;font-size:.68em;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:2px 6px 4px}
+td{padding:clamp(2px,.55vh,7px) 6px;border-top:1px solid rgba(38,55,90,.7);white-space:nowrap}
+td.pos{font-family:var(--f-display);font-weight:800;font-size:1.35em;width:2.2em}
+tr.r1 td.pos{color:var(--gold)}
+td.name{font-weight:600;overflow:hidden;text-overflow:ellipsis;max-width:0;width:34%}
+td.name .dot{margin-right:7px}
+td.where{color:var(--muted);width:24%}
+tr.fin td.where{color:var(--gold)}
+td.t{text-align:right;font-weight:600}
+tr.fin td.t{color:var(--gold)}
+.up{color:var(--ok);font-size:.75em;margin-left:4px}
+.dot{display:inline-block;width:.95em;height:.95em;border-radius:50%;background:var(--c);vertical-align:-.12em;box-shadow:0 0 0 2px rgba(0,0,0,.35)}
+.bar{height:6px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;min-width:60px}
+.bar i{display:block;height:100%;background:var(--c);border-radius:3px;transition:width .6s}
+tr.hit td{animation:hit 1.4s ease-out}
+@keyframes hit{0%{background:rgba(238,242,248,.16)}100%{background:transparent}}
+
+.feed{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px;flex:1;min-height:0;overflow:hidden}
+.ev{display:grid;grid-template-columns:auto auto minmax(0,1fr);align-items:baseline;gap:8px;padding:clamp(2px,.5vh,6px) 0;border-top:1px solid rgba(38,55,90,.7);line-height:1.25}
+.ev:first-child{border-top:0;animation:in .5s ease-out}
+@keyframes in{from{transform:translateY(-6px);opacity:.3}}
+.ev-t{color:var(--muted);font-variant-numeric:tabular-nums;font-size:.85em}
+.ev-x{min-width:0}
+.ev-x b{font-weight:700}
+.ev.warn .ev-x{color:var(--warn)}
+.ev.finish .ev-x{color:var(--gold)}
+.ev.info .ev-x{color:var(--muted)}
+.ev .dot{width:.8em;height:.8em}
+
+/* Fichas (bonecos) */
+.tokens{position:absolute;inset:0;pointer-events:none}
+.tok{position:absolute;left:0;top:0;height:var(--tok);max-width:13em;padding:0 .75em;border-radius:999px;background:var(--c);color:var(--ink);
+  display:block;font-family:var(--f-body);font-weight:700;font-size:calc(var(--tok) * .44);line-height:var(--tok);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  box-shadow:0 0 0 2px var(--floor),0 5px 10px rgba(0,0,0,.55);transition:transform .85s cubic-bezier(.34,1.4,.5,1);will-change:transform}
+.many .tok{--tok:clamp(18px,2.6vh,30px)}
+.tok.num{width:var(--tok);padding:0;text-align:center;font-family:var(--f-display);font-weight:900;font-size:calc(var(--tok) * .56);border-radius:50%}
+.rost{font-size:.8em;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.rost.ok{border-color:var(--ok);color:var(--ok)}
+.rost.bad{border-color:var(--live);color:#fff;background:var(--live)}
+.zcount{font-family:var(--f-display);font-weight:800;font-size:clamp(15px,2.4vh,28px);color:var(--muted);line-height:1.1}
+.tok.lead{box-shadow:0 0 0 2px var(--floor),0 0 0 5px var(--gold),0 5px 12px rgba(0,0,0,.6)}
+
+/* Controlos (escondidos em Modo TV) */
+.controls{display:flex;align-items:center;gap:10px 16px;flex-wrap:wrap;padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--tile)}
+.grp{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.grp > span{font-size:.75em;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-right:2px}
+button{font:inherit;font-weight:600;color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:5px;padding:6px 11px;cursor:pointer}
+button:hover{border-color:var(--muted)}
 button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
-button:disabled{opacity:.45;cursor:default}
-button.primary{background:var(--gold);color:var(--floor);border-color:var(--gold)}
-p{margin:0}
-.muted{color:var(--muted);font-size:.9rem}
-.err{background:rgba(229,72,77,.12);border:1px solid var(--bad);border-radius:10px;padding:12px;color:#ffd7d8}
+button.primary{background:var(--chalk);color:var(--floor);border-color:var(--chalk)}
+button[aria-pressed="true"]{background:var(--chalk);color:var(--floor);border-color:var(--chalk)}
+button.tap{min-width:34px;padding:6px 8px;background:var(--c);color:var(--ink);border-color:transparent;font-family:var(--f-display);font-weight:900;font-size:1.05em}
+.note{font-size:.78em;color:var(--muted);flex-basis:100%}
+.note kbd{font-family:inherit;font-weight:700;color:var(--chalk);border:1px solid var(--line);border-radius:3px;padding:0 4px}
+body.tv .controls{display:none}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--chalk);color:var(--floor);font-weight:600;padding:8px 14px;border-radius:6px;box-shadow:0 8px 20px rgba(0,0,0,.4);transition:opacity .4s}
+.toast[hidden]{display:none!important}
 
-/* Estado fixo no topo */
-.dock{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--floor);padding-block:6px;display:flex;flex-direction:column;gap:8px}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--floor)}
-.stage{border-radius:14px;padding:14px 16px;background:var(--tile);border:2px dashed var(--line);display:flex;flex-direction:column;gap:4px;min-height:118px;justify-content:center}
-.stage .big{font-family:var(--f-display);font-weight:900;font-size:2rem;line-height:1;text-transform:uppercase}
-.stage .sub{font-size:.92rem;color:var(--muted)}
-.stage.wait{border:2px solid var(--gold)}
-.stage.wait .big{color:var(--gold)}
-.stage.ok{background:var(--ok);border:2px solid var(--ok);color:#06210f}
-.stage.ok .sub{color:#0b3a1d}
-.stage.bad{background:var(--bad);border:2px solid var(--bad);color:#fff}
-.stage.bad .sub{color:#ffe1e2}
-.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.prog{flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px}
-.track{height:8px;border-radius:4px;background:var(--tile-hi);overflow:hidden}
-.track i{display:block;height:100%;background:var(--ok);transition:width .3s}
-
-/* Lista */
-.heat{display:flex;flex-direction:column;gap:6px}
-.hh{display:flex;align-items:baseline;gap:10px;padding-top:6px}
-.hh b{font-family:var(--f-display);font-weight:900;font-size:1.4rem;line-height:1}
-.hh .cat{font-size:.72rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c)}
-.row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;background:var(--tile);border-radius:10px;padding:10px 12px;border-left:4px solid var(--c)}
-.row.cur{outline:2px solid var(--gold)}
-.num{width:38px;height:38px;border-radius:50%;background:var(--c);color:var(--floor);display:grid;place-items:center;font-family:var(--f-display);font-weight:900;font-size:1.25rem}
-.row .nm{min-width:0}
-.row .nm b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.row .nm small{color:var(--muted);font-size:.78rem}
-.row .nm small.done{color:var(--ok);font-weight:700}
-.acts{display:flex;gap:6px}
-.acts button{padding:8px 10px;font-size:.85rem}
-.acts .copy{background:transparent}
+@media (max-width:860px){
+  html,body{height:auto}
+  .app{height:auto}
+  .board{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:minmax(118px,auto)}
+  .tile{grid-row:auto;grid-column:auto}
+  .center{grid-row:auto;grid-column:1/-1;order:-1;grid-template-columns:minmax(0,1fr)}
+  .lb-wrap{overflow-x:auto}
+  td.name{max-width:none}
+  .feed{max-height:260px}
+}
+@media (prefers-reduced-motion:reduce){
+  .tok,.bar i{transition:none}
+  .tile.ping,tr.hit td,.ev:first-child,.live.on i{animation:none}
+}
 </style>
-</head>
-<body>
-<div class="wrap">
-  <header>
-    <span class="eyebrow">Simulação Hyrox · preparação</span>
-    <h1>Gravar <span>chapinhas</span></h1>
+<style>
+.conn{display:inline-flex;align-items:center;gap:6px;font-size:.8em;color:var(--muted)}
+.conn i{width:9px;height:9px;border-radius:50%;background:var(--warn)}
+.conn.ok i{background:var(--ok)}
+select{font:inherit;color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:5px;padding:5px 8px}
+button.danger{border-color:var(--warn);color:var(--warn)}
+</style>
+<style>
+[hidden]{display:none!important}
+.center{grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)}
+td.split{color:var(--muted);font-size:.9em}
+td.split b{color:var(--chalk);font-weight:600}
+.ticker{display:flex;align-items:baseline;gap:8px;padding-top:6px;border-top:1px solid var(--line);font-size:.9em;min-height:1.6em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ticker .ev-t{color:var(--muted);font-variant-numeric:tabular-nums}
+.ticker.warn{color:var(--warn)}
+.ticker.finish{color:var(--gold)}
+.cat{font-family:var(--f-display);font-weight:800;font-size:1.05em;text-transform:uppercase;color:var(--gold);letter-spacing:.03em}
+.dots{display:flex;gap:5px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.dots i.on{background:var(--gold)}
+.gl{width:100%}
+.gl td{padding:clamp(3px,.7vh,8px) 6px}
+.gl td.pos{width:2em}
+.gl tr.new td{animation:hit 2.5s ease-out}
+.gl td.when{color:var(--muted);font-size:.85em;text-align:right}
+.empty{color:var(--muted);padding:8px 0}
+.st-in{position:absolute;right:8px;top:8px;font-size:.7em;font-weight:700;letter-spacing:.08em;color:var(--muted)}
+/* Configuração das duplas */
+.setup{flex-basis:100%;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px}
+.trow{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(0,.9fr) auto;gap:6px;align-items:center}
+.trow .num{width:28px;height:28px;border-radius:50%;background:var(--c);color:var(--ink);display:grid;place-items:center;font-family:var(--f-display);font-weight:900}
+input,select{font:inherit;color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:5px;padding:5px 7px;min-width:0;width:100%}
+.trow button{padding:5px 9px;white-space:nowrap}
+.trow button.go{background:var(--ok);color:#06210f;border-color:transparent}
+.trow .ran{font-size:.8em;color:var(--muted);white-space:nowrap}
+.trow .man{grid-column:2/-1;display:flex;gap:4px}
+.trow .man button{flex:1;padding:4px 6px;font-size:.82em}
+.trow .man button:active{background:var(--chalk);color:var(--floor)}
+button:disabled{opacity:.45;cursor:default}
+.conn{display:inline-flex;align-items:center;gap:6px;font-size:.8em;color:var(--muted)}
+.conn i{width:9px;height:9px;border-radius:50%;background:var(--warn)}
+.conn.ok i{background:var(--ok)}
+button.danger{border-color:var(--warn);color:var(--warn)}
+/* Parciais */
+.ov{position:fixed;inset:0;background:rgba(5,9,16,.86);display:flex;align-items:flex-start;justify-content:center;z-index:300;
+  padding-block:max(24px,env(safe-area-inset-top,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.ov .panel{max-width:1400px;width:100%;max-height:100%}
+.ov .tw{overflow:auto}
+.ov table{font-size:.9em}
+.ov th,.ov td{text-align:right}
+.ov th:nth-child(-n+2),.ov td:nth-child(-n+2){text-align:left}
+.ov td.best{color:var(--ok);font-weight:700}
+.ov th.r{color:#ffb4a8}
+.wave{display:inline-flex;align-items:baseline;gap:8px;padding:4px 12px;border-radius:8px;border:1px solid var(--gold);color:var(--gold);font-weight:700;font-variant-numeric:tabular-nums}
+.wave b{font-family:var(--f-display);font-size:1.6em;font-weight:800;line-height:1}
+.wave.soon{background:var(--gold);color:var(--floor)}
+.vt{font-size:.68em;font-weight:700;letter-spacing:.06em;color:var(--muted);margin-left:6px;border:1px solid var(--line);border-radius:4px;padding:0 4px}
+td.gap{text-align:right;color:var(--muted)}
+tr.r1 td.gap{color:var(--gold)}
+.cd{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:250}
+.cd div{background:rgba(11,19,32,.88);border:3px solid var(--gold);border-radius:18px;padding:18px 48px;text-align:center}
+.cd span{display:block;font-size:clamp(14px,2.4vh,26px);font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--gold)}
+.cd b{display:block;font-family:var(--f-display);font-weight:900;font-size:clamp(90px,22vh,260px);line-height:.9;color:var(--chalk);font-variant-numeric:tabular-nums}
+.controls{flex:none;max-height:30vh;overflow:auto}
+.startbox{flex:none;display:flex;flex-direction:column;gap:8px;padding:10px 12px;border:2px solid var(--gold);border-radius:8px;background:var(--tile)}
+.sbhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.sbhead b{font-family:var(--f-display);font-weight:900;font-size:1.5em;text-transform:uppercase;color:var(--gold);line-height:1}
+.sbhead #sbInfo{color:var(--muted);font-size:.9em;flex:1;min-width:12em}
+.pick{display:flex;flex-wrap:wrap;gap:5px;max-height:15vh;overflow:auto}
+.pk{display:inline-flex;align-items:center;gap:6px;padding:4px 9px;font-size:.88em;font-weight:600}
+.pk i{width:.8em;height:.8em;border-radius:50%;background:var(--c)}
+.pkh{flex-basis:100%;font-size:.72em;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-weight:700;padding-top:4px}
+.pk[aria-pressed="true"]{background:var(--gold);color:var(--floor);border-color:var(--gold)}
+.sbact{display:flex;gap:8px;flex-wrap:wrap}
+#bGo{font-size:1.15em;padding:10px 22px}
+#bUnStart.arm{background:var(--live);border-color:var(--live);color:#fff}
+body.tv .startbox{display:none}
+body.tv.showstart .startbox{display:flex;position:fixed;z-index:300;left:max(16px,env(safe-area-inset-left,0px));right:max(16px,env(safe-area-inset-right,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));max-height:55vh;box-shadow:0 12px 40px rgba(0,0,0,.6)}
+.wh{grid-column:1/-1;font-size:.75em;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-weight:700;padding-top:6px}
+.setup .wh:first-child{padding-top:0}
+input.sm{width:4.2em}
+@media (max-width:860px){.center{grid-template-columns:minmax(0,1fr)}}
+</style>
+</head><body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <span class="eyebrow">Ao vivo na box · Duplas · 8 × 1 km + 8 estações</span>
+      <h1>Simulação <span>Hyrox</span></h1>
+    </div>
+    <div class="status">
+      <span class="conn" id="conn"><i></i><span id="connTxt">A ligar…</span></span>
+      <div class="counts"><span><b id="cRace">0</b> em prova</span><span><b id="cFin">0</b> terminaram</span></div>
+      <span class="live" id="live"><i></i><span id="liveTxt">Antes da partida</span></span>
+      <div class="clock" id="clock">00:00</div>
+    </div>
   </header>
 
-  <div id="unsupported" class="err" hidden><p><b>Este telemóvel não consegue gravar chapinhas nesta página</b> (precisa de Android com NFC e Google Chrome). Podes usar o botão "Copiar link" de cada dupla e gravar na app NFC Tools.</p></div>
+  <main class="board" id="board">
+    <section class="center">
+      <div class="panel">
+        <h2><span id="lbTitle">Classificação</span> <small id="lbInfo">Prova de hoje</small></h2>
+        <div class="lb-wrap">
+          <table>
+            <thead><tr><th>#</th><th>Equipa</th><th>Onde está</th><th>Último parcial</th><th style="text-align:right" title="Diferença para o líder">Dif.</th><th style="text-align:right">Tempo</th></tr></thead>
+            <tbody id="lb"></tbody>
+          </table>
+        </div>
+        <div class="ticker" id="ticker"></div>
+      </div>
+      <div class="panel">
+        <h2>Leaderboard geral <span class="dots" id="dots"></span></h2>
+        <div class="cat" id="catName">Sem resultados</div>
+        <div class="lb-wrap"><table class="gl"><tbody id="gl"></tbody></table></div>
+      </div>
+    </section>
+    <div class="tokens" id="tokens"></div>
+    <div class="cd" id="cd" hidden><div><span id="cdLabel">Partida</span><b id="cdNum">1</b></div></div>
+  </main>
 
-  <div class="dock">
-    <div class="stage" id="stage" role="status" aria-live="assertive">
-      <div class="big" id="big">Escolhe uma dupla</div>
-      <div class="sub" id="sub">Carrega em "Gravar" na dupla e encosta a chapinha nas costas do telemóvel.</div>
+  <section class="startbox" id="startbox" aria-label="Partida">
+    <div class="sbhead"><b>Partida</b><span id="sbInfo">Seleciona as duplas que vão sair e carrega em Dar partida.</span>
+      <span class="rost" id="rost">A carregar equipas…</span><button id="bNext5" type="button">Selecionar próximo heat</button><button id="bClear" type="button">Limpar seleção</button></div>
+    <div class="pick" id="pick"></div>
+    <div class="sbact"><button class="primary" id="bGo" type="button" disabled>Dar partida</button><button id="bUnStart" type="button" hidden>Anular última partida</button></div>
+  </section>
+
+  <footer class="controls" id="controls">
+    <div class="grp">
+      <button id="bSplits" type="button">Ver parciais</button>
+      <button id="bReset" type="button">Nova prova</button>
+      <button id="bUndo" type="button" disabled>Desfazer manual</button>
     </div>
-    <div class="bar">
-      <div class="prog"><span class="eyebrow" id="progTxt">0 de 0 gravadas</span><div class="track"><i id="progBar" style="width:0%"></i></div></div>
-      <button id="bCheck" type="button">Verificar chapinha</button>
-      <button id="bCancel" type="button" hidden>Cancelar</button>
+    <div class="grp">
+      <span>Duplas</span>
+      <select id="nTeams" aria-label="Número de duplas" style="width:auto"></select>
     </div>
-  </div>
-
-  <p class="muted">Cada chapinha fica com o link dos parciais da sua dupla. Os leitores da prova leem o número da dupla nesse link, e um atleta que encoste a pulseira ao próprio telemóvel vê os seus resultados. Grava com a chapinha já dentro da peça impressa, para confirmar que lê através do PLA.</p>
-
-  <main id="list"><p class="muted">A carregar duplas…</p></main>
+    <div class="grp">
+      <span>Categorias</span>
+      <input id="cats" aria-label="Categorias separadas por vírgulas" style="width:22em">
+    </div>
+    <div class="grp">
+      <button id="bFull" type="button">Ecrã inteiro</button>
+      <button id="bTv" type="button">Modo TV</button>
+    </div>
+    <div class="setup" id="setup"></div>
+    <p class="note">Quatro pontos: <b>Partida</b> aqui no portátil, <b>500 m</b> na viragem de cada corrida (a primeira picagem de cada dupla), <b>Entrada da box</b> no fim de cada estação (da 1 à 7) e <b>Meta</b> no fim do Wall Balls. Na Partida, seleciona as duplas que vão sair (ou "Selecionar próximas 5") e carrega em "Dar partida": cada dupla conta o tempo a partir desse momento. "Anular última partida" corrige um arranque por engano (até 2 minutos). Em Modo TV, a tecla <kbd>P</kbd> mostra ou esconde a Partida. Com o ecrã da TV em modo expandido, podes ter esta página aberta duas vezes no mesmo browser (uma no portátil, outra na TV em Modo TV): ficam sincronizadas. A classificação alterna entre cada categoria (as duplas que já terminaram, pelo tempo final, e depois as que estão em prova) e cada heat em prova (a corrida entre as duplas que partiram juntas, com a diferença para o líder do heat no mesmo ponto). Se o NFC falhar, usa os botões 500 m, Box e Meta de cada dupla, e "Desfazer" para corrigir um engano (até 5 minutos). Tecla <kbd>H</kbd> esconde ou mostra os controlos.</p>
+  </footer>
 </div>
+<div class="ov" id="ov" hidden>
+  <div class="panel">
+    <h2>Parciais <button id="bClose" type="button">Fechar</button></h2>
+    <div class="tw"><table><thead id="spH"></thead><tbody id="spB"></tbody></table></div>
+  </div>
+</div>
+<div class="toast" id="toast" hidden>Carrega em H para voltar a ver os controlos</div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
 <script>
 (function(){
 const SB_URL='https://cxxufzwgkvqlnexabvnf.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4eHVmendna3ZxbG5leGFidm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4MDUxMDQsImV4cCI6MjEwOTM4MTEwNH0.XrTcailh4rHK-IxN6IdFaNNRiTHrRJ5LBfM9Zyt2q7I';
-const BASE='https://rubenpacheco58.github.io/hyrox-nfc/resultados.html?d=';
-const CAT={'Dupla Masculina':'var(--masc)','Dupla Mista':'var(--mista)','Dupla Feminina':'var(--fem)'};
+const TAP_URL=SB_URL+'/functions/v1/hyrox-tap';
+const DUP=90;   // segundos: nova picagem no mesmo ponto antes disto é repetida
+const ST=[
+  {name:'SkiErg',std:'1000 m'},{name:'Sled Push',std:'50 m'},{name:'Sled Pull',std:'50 m'},{name:'Burpee Broad Jumps',std:'80 m'},
+  {name:'Rowing',std:'1000 m'},{name:'Farmers Carry',std:'200 m'},{name:'Sandbag Lunges',std:'100 m'},{name:'Wall Balls',std:'100 reps'}];
+const COLORS=['#4cc9f0','#f72585','#a7e05a','#ff7b54','#9b5de5','#3d5afe','#14b8a6','#e5e7eb','#ffd166','#06d6a0','#ef476f','#118ab2'];
+const FIN=17; // fases: 2k+1 = Run k ida · 2k+2 = Run k volta + estação k · 17 = meta
 const $=id=>document.getElementById(id);
-const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
-const supported='NDEFReader' in window;
-let teams=[],done={};try{done=JSON.parse(store.get('hx_written')||'{}')}catch(e){done={}}
-let ctrl=null,busy=false,cur=null;
+const board=$('board'),tokLayer=$('tokens');
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}};
+const J=(k,d)=>{try{return JSON.parse(store.get(k))??d}catch(e){return d}};
+function ink(hex){const n=parseInt(hex.slice(1),16);return (0.299*(n>>16&255)+0.587*(n>>8&255)+0.114*(n&255))>150?'#0b1320':'#ffffff';}
+function fmt(s){s=Math.max(0,Math.floor(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;const p=n=>String(n).padStart(2,'0');return h?`${h}:${p(m)}:${p(x)}`:`${p(m)}:${p(x)}`;}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-function link(t){return BASE+t;}
 
-let ac=null;
-function beep(ok){try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();ac.resume();const n=ac.currentTime;(ok?[[1046,0,.12],[1568,.11,.16]]:[[220,0,.35]]).forEach(([f,s,d])=>{const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.frequency.value=f;g.gain.setValueAtTime(.0001,n+s);g.gain.exponentialRampToValueAtTime(.25,n+s+.01);g.gain.exponentialRampToValueAtTime(.0001,n+s+d);o.connect(g).connect(ac.destination);o.start(n+s);o.stop(n+s+d+.02);});}catch(e){}
-  try{navigator.vibrate&&navigator.vibrate(ok?120:[200,80,200]);}catch(e){}}
-function show(kind,big,sub){const s=$('stage');s.className='stage '+(kind||'');$('big').textContent=big;$('sub').textContent=sub||'';}
+/* Tabuleiro */
+const TILES=[{type:'start'}];
+for(let k=0;k<8;k++){TILES.push({type:'run',k});TILES.push({type:'st',k});}
+TILES.push({type:'finish'});
+function ringPos(i){if(i<=6)return[1,i+1];if(i<=8)return[i-5,7];if(i<=15)return[4,7-(i-9)];return[i===16?3:2,1];}
+const zoneEl={};
+TILES.forEach((t,i)=>{
+  const [r,c]=ringPos(i);const el=document.createElement('div');el.style.setProperty('--r',r);el.style.setProperty('--c',c);
+  if(t.type==='start'){el.className='tile t-start';el.innerHTML=`<div class="t-head"><span class="eyebrow">Casa de partida</span><span class="t-name">Partida</span><span class="zcount" id="zStart"></span></div><div class="zone" data-z="start"></div>`;}
+  else if(t.type==='finish'){el.className='tile t-finish';el.innerHTML=`<div class="t-head"><span class="eyebrow">Picagem depois do Wall Balls</span><span class="t-name">Meta</span><span class="zcount" id="zFin"></span></div><div class="zone" data-z="finish"></div>`;}
+  else if(t.type==='run'){el.className='tile t-run';el.innerHTML=`<div class="t-head"><span class="eyebrow">Corrida ${t.k+1} de 8</span><span class="t-name">Run ${t.k+1}</span><span class="t-std">1 km</span></div><div class="zones"><div class="zone" data-z="run${t.k}o"><span class="zl">Ida</span></div><div class="mid"><span>500 m</span></div><div class="zone" data-z="run${t.k}b"><span class="zl">Volta</span></div></div>`;}
+  else{el.className='tile t-st';el.innerHTML=`<div class="t-head"><span class="eyebrow">Estação ${t.k+1}</span><span class="t-name">${ST[t.k].name}</span><span class="t-std">${ST[t.k].std}</span></div><div class="zone" data-z="st${t.k}"></div>`;}
+  board.insertBefore(el,tokLayer);
+});
+board.querySelectorAll('.zone').forEach(z=>zoneEl[z.dataset.z]=z);
 
-async function load(){
-  try{
-    const r=await fetch(`${SB_URL}/rest/v1/hyrox_sim_teams?select=team,name,category,heat,heat_time&order=team.asc`,{headers:{apikey:SB_KEY,Authorization:`Bearer ${SB_KEY}`},cache:'no-store'});
-    if(!r.ok)throw 0;teams=await r.json();paint();
-  }catch(e){$('list').innerHTML='<div class="err"><p><b>Não consegui carregar as duplas.</b> Confirma a internet e recarrega a página.</p></div>';}
+/* Configuração guardada neste computador */
+let cfg=J('hxpCfg',null)||{n:5,cats:['Dupla Masculina','Dupla Feminina','Dupla Mista'],teams:[]};
+let race=J('hxpRace',null);
+function saveCfg(){store.set('hxpCfg',JSON.stringify(cfg));}
+function saveRace(){store.set('hxpRace',race?JSON.stringify(race):null);}
+function teamCfg(i){cfg.teams[i]=cfg.teams[i]||{name:`Dupla ${i+1}`,cat:cfg.cats[0]||'Geral'};return cfg.teams[i];}
+function startOf(tm){return race&&race.starts[tm.id];}
+/* Lista oficial das duplas (nomes, categorias e heats), lida da base de dados */
+let roster=J('hxpRoster',[]);
+function heatOf(id){const r=roster.find(x=>x.team===id);return r?r.heat:0;}
+function heatTime(h){const r=roster.find(x=>x.heat===h);return r?r.heat_time:'';}
+function groupOf(id){return race&&race.groups&&race.groups.find(g=>g.ids.includes(id));}
+function gLabel(g){return g?(g.label||`V${g.n}`):'';}
+function waveOf(id){return gLabel(groupOf(id));}
+function waveIdx(id){const g=groupOf(id);return g?g.n:999;}
+function nWaves(){return race&&race.groups?race.groups.length:0;}
+function hms(ms){return new Date(ms).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+
+const S={teams:[],seen:new Set(),batch:false,ticker:null};
+function build(){
+  document.body.classList.toggle('many',cfg.n>20);
+  S.teams=Array.from({length:cfg.n},(_,i)=>{const c=teamCfg(i);const color=COLORS[i%COLORS.length];
+    return {id:i+1,name:c.name,cat:c.cat,color,ink:ink(color),q:0,times:[],lastSplit:null,rank:i+1,up:false,hit:0,zone:'start',el:null,saved:false};});
+  tokLayer.innerHTML='';
+  S.teams.forEach(tm=>{const d=document.createElement('div');d.className='tok';d.textContent=tm.name;d.style.setProperty('--c',tm.color);d.style.setProperty('--ink',tm.ink);tokLayer.appendChild(d);tm.el=d;});
+  if(race)S.teams.forEach(tm=>{const st=startOf(tm);if(st){tm.q=1;tm.times[1]=st;}});
+  S.seen=new Set();
 }
-function paint(){
-  const heats=[...new Set(teams.map(t=>t.heat))];
-  $('list').innerHTML=heats.map(h=>{const ts=teams.filter(t=>t.heat===h);const c=CAT[ts[0].category]||'var(--gold)';
-    return `<section class="heat"><div class="hh" style="--c:${c}"><b>H${h} · ${esc(ts[0].heat_time)}</b><span class="cat">${esc(ts[0].category)}</span></div>
-      ${ts.map(t=>`<div class="row ${cur===t.team?'cur':''}" id="r${t.team}" style="--c:${CAT[t.category]||'var(--gold)'}"><span class="num">${t.team}</span>
-        <span class="nm"><b>${esc(t.name)}</b><small class="${done[t.team]?'done':''}">${done[t.team]?'Gravada ✓':'Por gravar'}</small></span>
-        <span class="acts">${supported?`<button class="primary" type="button" data-w="${t.team}">Gravar</button>`:''}<button class="copy" type="button" data-c="${t.team}">Copiar link</button></span></div>`).join('')}</section>`;}).join('');
-  const n=Object.keys(done).filter(k=>teams.some(t=>t.team===+k)).length;
-  $('progTxt').textContent=`${n} de ${teams.length} gravadas`;$('progBar').style.width=(teams.length?n/teams.length*100:0)+'%';
-}
-function stop(){try{ctrl&&ctrl.abort();}catch(e){}ctrl=null;busy=false;$('bCancel').hidden=true;}
 
-async function write(team){
-  const t=teams.find(x=>x.team===team);if(!t||busy)return;
-  stop();busy=true;cur=team;paint();$('bCancel').hidden=false;
-  show('wait',`#${t.team} ${t.name}`,'Encosta agora a chapinha nas costas do telemóvel e mantém-na parada.');
-  ctrl=new AbortController();const to=setTimeout(()=>{try{ctrl.abort();}catch(e){}},30000);
-  try{
-    const w=new NDEFReader();
-    await w.write({records:[{recordType:'url',data:link(team)}]},{signal:ctrl.signal,overwrite:true});
-    clearTimeout(to);done[team]=Date.now();store.set('hx_written',JSON.stringify(done));beep(true);
-    const next=teams.find(x=>x.team>team&&!done[x.team]);
-    show('ok',`#${t.team} ${t.name} gravada`,next?`Próxima: #${next.team} ${next.name}. Carrega em Gravar nessa dupla.`:'Todas as duplas da lista estão gravadas.');
-    cur=next?next.team:null;busy=false;$('bCancel').hidden=true;paint();
-    if(next){const el=$('r'+next.team);el&&el.scrollIntoView({block:'center',behavior:'smooth'});}
-  }catch(e){
-    clearTimeout(to);busy=false;$('bCancel').hidden=true;
-    if(e&&e.name==='AbortError'){show('','Gravação cancelada','Carrega em Gravar para tentar outra vez.');return;}
-    beep(false);
-    const denied=e&&e.name==='NotAllowedError';
-    show('bad','Não gravou',denied?'O Chrome não tem autorização para usar o NFC. Permite nas definições do site e tenta outra vez.':'Encosta outra vez e não mexas até ouvir o bip. Se continuar a falhar, a chapinha pode estar bloqueada ou o PLA é demasiado grosso.');
+/* Onde está: depois dos 500 m, a passagem para a estação é estimada (volta = ida) */
+function inStation(tm,now){
+  if(tm.q<=0||tm.q>=FIN||tm.q%2===1)return false;
+  const k=(tm.q-2)/2,t500=tm.times[tm.q],ida=tm.times[tm.q-1];
+  if(!t500)return true;
+  const est=ida?Math.min(Math.max(t500-ida,60000),420000):180000;
+  return now>=t500+est;
+}
+function zoneOf(tm,now){
+  const q=tm.q;if(q<=0)return'start';if(q>=FIN)return'finish';
+  const k=Math.floor((q-1)/2);
+  if(q%2===1)return`run${k}o`;
+  return inStation(tm,now)?`st${k}`:`run${k}b`;
+}
+function whereLabel(tm,now){
+  const q=tm.q;if(!startOf(tm))return'À espera';if(q>=FIN)return'Terminou';
+  const k=Math.floor((q-1)/2);
+  if(q%2===1)return`Run ${k+1} · ida`;
+  return inStation(tm,now)?ST[k].name:`Run ${k+1} · volta`;
+}
+
+/* Picagens */
+function tick(type,tm,msg,ms){S.ticker={type,tm,msg,ms};}
+function go(tm,q,ms){tm.q=q;tm.times[q]=ms;tm.hit=performance.now();}
+function finish(tm,ms,warn){
+  const k=7,ida=tm.times[16];
+  if(ida)tm.lastSplit={label:'Volta + Wall Balls',secs:(ms-ida)/1000};
+  go(tm,FIN,ms);tick(warn?'warn':'finish',tm,warn||`Cortou a meta · ${fmt((ms-startOf(tm))/1000)}`,ms);saveResult(tm);
+}
+function apply(row){
+  if(S.seen.has(row.id))return;S.seen.add(row.id);
+  const tm=S.teams[row.team-1];const ms=Date.parse(row.created_at);
+  if(!tm){tick('warn',null,`Chapinha ${row.team} não está em prova`,ms);return;}
+  const st=startOf(tm);if(!st||ms<st||tm.q>=FIN)return;
+  const q=tm.q,k=Math.floor((q-1)/2),since=(ms-(tm.times[q]||st))/1000;
+  const pt=row.point==='manual'?'manual':row.point==='500m'?'500m':row.point==='meta'?'meta':'box';
+
+  if(pt==='manual'){ // botão de recurso: avança uma casa
+    if(q===16)finish(tm,ms);else{go(tm,q+1,ms);tick('info',tm,'Picagem manual',ms);}return;
+  }
+  if(pt==='500m'){
+    if(q%2===1){tm.lastSplit={label:`Run ${k+1} ida`,secs:since};go(tm,q+1,ms);tick('turn',tm,`Viragem nos 500 m · Run ${k+1}`,ms);return;}
+    if(since<DUP)return; // repetida
+    if(k<7){go(tm,q+2,ms);tick('warn',tm,`Picagem da box em falta depois do ${ST[k].name} · viragem Run ${k+2}`,ms);}
+    return;
+  }
+  if(pt==='box'){
+    if(q%2===0){
+      if(since<DUP)return;
+      if(k===7){finish(tm,ms,'Picou na box em vez da meta · contou como meta');return;}
+      tm.lastSplit={label:`Volta + ${ST[k].name}`,secs:since};go(tm,q+1,ms);tick('station',tm,`${ST[k].name} feito · sai para a Run ${k+2}`,ms);return;
+    }
+    if(since<DUP)return; // ainda na ida: picagem repetida
+    if(k<7){go(tm,q+2,ms);tick('warn',tm,`Viragem dos 500 m em falta na Run ${k+1}`,ms);}
+    return;
+  }
+  if(pt==='meta'){
+    if(k===7&&q===16){if(since<DUP)return;finish(tm,ms);return;}
+    if(k===7&&q===15){finish(tm,ms,'Cortou a meta · viragem dos 500 m da Run 8 em falta');return;}
+    tick('warn',tm,'Picou na meta antes do tempo · ignorada',ms);return;
   }
 }
-async function check(){
-  stop();busy=true;$('bCancel').hidden=false;show('wait','Verificar','Encosta uma chapinha para ver a que dupla pertence.');
-  ctrl=new AbortController();
-  try{
-    const r=new NDEFReader();await r.scan({signal:ctrl.signal});
-    r.onreading=ev=>{
-      let n=null;for(const rec of ev.message.records||[]){try{const txt=new TextDecoder(rec.encoding||'utf-8').decode(rec.data);const m=txt.match(/[?&]d=(\d{1,2})\b/);if(m){n=+m[1];break;}}catch(e){}}
-      const t=teams.find(x=>x.team===n);
-      if(t){beep(true);show('ok',`#${t.team} ${t.name}`,`H${t.heat} · ${t.heat_time} · ${t.category}. Encosta outra para verificar.`);}
-      else{beep(false);show('bad','Chapinha sem dupla',n?`Tem o número ${n}, que não está na lista.`:'Está vazia ou tem outro conteúdo. Grava-a com uma dupla.');}
-    };
-    r.onreadingerror=()=>{beep(false);show('bad','Não li bem','Encosta outra vez, sem mexer.');};
-  }catch(e){busy=false;$('bCancel').hidden=true;show('bad','NFC indisponível','Confirma que o NFC está ligado e que o Chrome tem autorização.');}
+function splitsOf(tm){
+  const out=[];
+  for(let k=0;k<8;k++){
+    const a=tm.times[2*k+1],b=tm.times[2*k+2],c=tm.times[2*k+3];
+    out.push({ida:(a&&b)?Math.round((b-a)/1000):null,resto:(b&&c)?Math.round((c-b)/1000):null});
+  }
+  return out;
 }
-$('list').addEventListener('click',async e=>{
-  const w=e.target.closest('[data-w]');if(w){write(+w.dataset.w);return;}
-  const c=e.target.closest('[data-c]');if(c){const url=link(+c.dataset.c);
-    try{await navigator.clipboard.writeText(url);c.textContent='Copiado ✓';setTimeout(()=>{c.textContent='Copiar link';},1500);}
-    catch(err){show('',`Link da dupla ${c.dataset.c}`,url);}}
+
+/* Leaderboard geral */
+const client=supabase.createClient(SB_URL,SB_KEY);
+async function saveResult(tm){
+  if(tm.saved||!race)return;tm.saved=true;
+  const total=Math.round((tm.times[FIN]-startOf(tm))/1000);if(total<60)return;
+  const {error}=await client.from('hyrox_sim_results').upsert({race_id:race.id,team:tm.id,name:tm.name.slice(0,60),category:(tm.cat||'Geral').slice(0,40),total_secs:total,splits:splitsOf(tm)},{onConflict:'race_id,team',ignoreDuplicates:true});
+  if(error){tm.saved=false;tick('warn',tm,'Não consegui guardar o resultado no leaderboard geral',Date.now());render();}
+}
+let results=[],catIdx=0,newIds=new Set();
+async function loadResults(){const {data,error}=await client.from('hyrox_sim_results').select('id,name,category,total_secs,created_at').order('total_secs',{ascending:true}).limit(500);if(!error){results=data;renderGeneral();}}
+function catsWithResults(){const o=cfg.cats.filter(c=>results.some(r=>r.category===c));results.forEach(r=>{if(!o.includes(r.category))o.push(r.category);});return o;}
+function renderGeneral(){
+  const cats=catsWithResults();
+  $('dots').innerHTML=cats.map((c,i)=>`<i class="${i===catIdx%Math.max(1,cats.length)?'on':''}"></i>`).join('');
+  if(!cats.length){$('catName').textContent='Ainda sem resultados';$('gl').innerHTML='<tr><td class="empty">Quando a primeira dupla cortar a meta, aparece aqui.</td></tr>';return;}
+  const cat=cats[catIdx%cats.length];$('catName').textContent=cat;
+  $('gl').innerHTML=results.filter(r=>r.category===cat).slice(0,10).map((r,i)=>`<tr class="${i===0?'r1':''} ${newIds.has(r.id)?'new':''}"><td class="pos">${i+1}</td><td class="name">${esc(r.name)}</td><td class="t">${fmt(r.total_secs)}</td><td class="when">${new Date(r.created_at).toLocaleDateString('pt-PT',{day:'2-digit',month:'2-digit'})}</td></tr>`).join('');
+}
+setInterval(()=>{catIdx++;renderGeneral();},10000);
+
+/* Tempo real */
+async function replay(){
+  if(!race)return;const starts=Object.values(race.starts);if(!starts.length)return;
+  const {data,error}=await client.from('hyrox_sim_taps').select('*').gte('created_at',new Date(Math.min(...starts)).toISOString()).order('created_at',{ascending:true}).limit(5000);
+  if(error){setConn(false,'Erro a ler picagens');return;}
+  S.batch=true;data.forEach(apply);S.batch=false;render();
+}
+function setConn(ok,txt){$('conn').classList.toggle('ok',ok);$('connTxt').textContent=txt||(ok?'Ligado':'Sem ligação');}
+client.channel('hyrox-prova')
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'hyrox_sim_taps'},p=>{
+    // picagem manual com hora atrasada ("há 1 min"): se for anterior à última da dupla, recalcula tudo pela ordem certa
+    const tm=S.teams[p.new.team-1],ms=Date.parse(p.new.created_at);
+    if(tm&&tm.q>1&&tm.times[tm.q]&&ms<tm.times[tm.q]){build();setupKey='';replay();return;}
+    apply(p.new);render();})
+  .on('postgres_changes',{event:'DELETE',schema:'public',table:'hyrox_sim_taps'},()=>{build();setupKey='';replay().then(()=>{tick('info',null,'Uma picagem foi desfeita · classificação recalculada',Date.now());render();});})
+  .on('postgres_changes',{event:'INSERT',schema:'public',table:'hyrox_sim_results'},p=>{newIds.add(p.new.id);results.push(p.new);results.sort((a,b)=>a.total_secs-b.total_secs);catIdx=Math.max(0,catsWithResults().indexOf(p.new.category));renderGeneral();})
+  .subscribe(st=>{if(st==='SUBSCRIBED'){setConn(true);replay();loadResults();}else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED')setConn(false);});
+
+/* Desenho */
+function elapsed(tm){const st=startOf(tm);if(!st)return 0;return((tm.q>=FIN?tm.times[FIN]:Date.now())-st)/1000;}
+/* Classificação: por categoria, as que terminaram ordenadas pelo tempo final, depois as que estão em prova.
+   Por heat, a corrida ao vivo entre as duplas que partiram juntas. */
+function elAt(tm,q){const st=startOf(tm);return st&&tm.times[q]?(tm.times[q]-st)/1000:null;}
+function ranking(){
+  const fin={};
+  S.teams.filter(t=>startOf(t)&&t.q>=FIN).sort((a,b)=>elAt(a,FIN)-elAt(b,FIN)).forEach(t=>{(fin[t.cat]=fin[t.cat]||[]).push(t);});
+  S.teams.forEach(t=>{t.rank=null;t.gap=null;t.up=false;});
+  for(const c in fin){const lead=elAt(fin[c][0],FIN);fin[c].forEach((t,i)=>{t.rank=i+1;t.gap=elAt(t,FIN)-lead;});}
+  const live=(a,b)=>b.q-a.q||(elAt(a,a.q)??0)-(elAt(b,b.q)??0)||a.id-b.id;
+  const arr=[...S.teams].sort((a,b)=>{const ga=!startOf(a)?2:a.q>=FIN?0:1,gb=!startOf(b)?2:b.q>=FIN?0:1;
+    return ga-gb||(ga===0?(a.rank-b.rank):live(a,b));});
+  return arr;
+}
+function heatRows(g){
+  const ts=S.teams.filter(t=>g.ids.includes(t.id)&&startOf(t));
+  ts.sort((a,b)=>b.q-a.q||(elAt(a,a.q)??0)-(elAt(b,b.q)??0)||a.id-b.id);
+  return ts.map((t,i)=>{let gap=null;if(t.q>=2){const best=Math.min(...ts.map(x=>elAt(x,t.q)).filter(v=>v!=null));const e=elAt(t,t.q);if(e!=null)gap=e-best;}return {t,pos:i+1,gap};});
+}
+function render(){
+  if(S.batch)return;
+  const now=Date.now(),arr=ranking(),started=S.teams.filter(t=>startOf(t)),fin=S.teams.filter(t=>t.q>=FIN).length;
+  $('cFin').textContent=fin;$('cRace').textContent=started.length-fin;
+  const live=started.length>fin;$('live').classList.toggle('on',live);
+  $('liveTxt').textContent=!started.length?'Antes da partida':(live?'Ao vivo':'Terminada');
+  const pn=performance.now();
+  // a TV alterna: classificação de cada categoria em prova e, a seguir, cada heat ainda em prova
+  const vs=views(started);if(lbView>=vs.length){lbView=0;lbPage=0;}const v=vs[lbView];
+  let rows;
+  if(v.k==='grp')rows=heatRows(v.g).map(r=>({t:r.t,pos:r.pos,dif:r.gap==null?'·':r.gap<1?'Líder':`+${fmt(r.gap)}`}));
+  else rows=arr.filter(t=>startOf(t)&&(v.k!=='cat'||t.cat===v.c)).map(t=>({t,pos:t.rank||'·',dif:t.q>=FIN?(t.gap<1?'Líder':`+${fmt(t.gap)}`):'Em prova'}));
+  const per=lbPerPage(),pages=Math.max(1,Math.ceil(rows.length/per));if(lbPage>=pages)lbPage=0;S.lbPages=pages;S.lbViews=vs.length;
+  const pg=pages>1?` · página ${lbPage+1} de ${pages}`:'';
+  const nFin=v.k==='cat'?arr.filter(t=>t.cat===v.c&&t.q>=FIN).length:0;
+  $('lbTitle').textContent=v.k==='grp'?`Heat ${gLabel(v.g).replace(/^H/,'')}`:v.k==='cat'?v.c:'Classificação';
+  $('lbInfo').textContent=v.k==='grp'?`${heatTime(heatOf(v.g.ids[0]))?`${heatTime(heatOf(v.g.ids[0]))} · `:''}em prova há ${fmt((now-v.g.at)/1000)}${pg}`:v.k==='cat'?`${nFin} terminaram${pg}`:`Prova de hoje${pg}`;
+  $('lb').innerHTML=rows.slice(lbPage*per,lbPage*per+per).map(({t:tm,pos,dif})=>{
+    const done=tm.q>=FIN,st=startOf(tm);
+    const sp=tm.lastSplit?`${esc(tm.lastSplit.label)} <b>${fmt(tm.lastSplit.secs)}</b>`:'·';
+    return `<tr class="${pos===1?'r1':''} ${done?'fin':''} ${pn-tm.hit<1500?'hit':''}"><td class="pos">${pos}</td><td class="name"><span class="dot" style="--c:${tm.color}"></span>${esc(tm.name)}${waveOf(tm.id)&&v.k!=='grp'?`<span class="vt">${waveOf(tm.id)}</span>`:''}</td><td class="where">${whereLabel(tm,now)}</td><td class="split">${sp}</td><td class="gap">${dif}</td><td class="t">${st?fmt(elapsed(tm)):'·'}</td></tr>`;
+  }).join('');
+  const tk=$('ticker'),e=S.ticker;tk.className='ticker '+(e?e.type:'');
+  tk.innerHTML=e?`<span class="ev-t">${new Date(e.ms).toLocaleTimeString('pt-PT')}</span>${e.tm?`<span class="dot" style="--c:${e.tm.color}"></span><b>${esc(e.tm.name)}</b>`:''}<span>${esc(e.msg)}</span>`:'<span class="ev-t">À espera da primeira picagem</span>';
+  placeTokens(arr,now);renderSetup();
+  if(!$('ov').hidden)renderSplits();
+}
+let lbPage=0,lbView=0;
+function views(started){
+  const v=[];
+  cfg.cats.forEach(c=>{if(started.some(t=>t.cat===c))v.push({k:'cat',c});});
+  started.forEach(t=>{if(!cfg.cats.includes(t.cat)&&!v.some(x=>x.c===t.cat))v.push({k:'cat',c:t.cat});});
+  (race&&race.groups||[]).forEach(g=>{if(g.ids.some(id=>{const tm=S.teams[id-1];return tm&&tm.q<FIN;}))v.push({k:'grp',g});});
+  return v.length?v:[{k:'all'}];
+}
+function lbPerPage(){const w=document.querySelector('.lb-wrap');const row=$('lb').querySelector('tr');const rh=row?row.offsetHeight:30;const th=w.querySelector('thead')?.offsetHeight||24;return Math.max(4,Math.floor((w.clientHeight-th)/Math.max(18,rh)));}
+setInterval(()=>{lbPage++;if(lbPage>=(S.lbPages||1)){lbPage=0;lbView++;if(lbView>=(S.lbViews||1))lbView=0;}render();},8000);
+function placeTokens(arr,now){
+  now=now||Date.now();arr=arr||[...S.teams];
+  const br=board.getBoundingClientRect(),g=5,groups={};
+  const waiting=S.teams.filter(t=>!startOf(t)).length,fin=S.teams.filter(t=>t.q>=FIN);
+  $('zStart').textContent=waiting?`${waiting} à espera`:'';
+  $('zFin').textContent=fin.length?`${fin.length} terminaram`:'';
+  const finShown=new Set([...fin].sort((a,b)=>b.times[FIN]-a.times[FIN]).slice(0,8).map(t=>t.id)); // na meta: as 8 últimas a chegar
+  arr.forEach(tm=>{
+    const wait=!startOf(tm),show=wait||tm.q<FIN||finShown.has(tm.id);tm.el.hidden=!show;if(!show)return;
+    const label=wait?String(tm.id):tm.name;if(tm.el.textContent!==label)tm.el.textContent=label;tm.el.classList.toggle('num',wait); // na partida: número; em prova: nome
+    const z=zoneOf(tm,now);(groups[z]=groups[z]||[]).push(tm);});
+  for(const z in groups){
+    const zr=zoneEl[z].getBoundingClientRect(),pad=5,w=Math.max(40,zr.width-pad*2),h=Math.max(20,zr.height-pad*2);
+    const list=groups[z];list.forEach(tm=>{tm.el.style.maxWidth=w+'px';});
+    const tk=list[0].el.offsetHeight||28;
+    // nomes em linhas que cabem na largura da casa; se não couberem na altura, as linhas sobrepõem-se um pouco
+    const rows=[[]];let cw=0;
+    list.forEach(tm=>{const ew=tm.el.offsetWidth;if(rows[rows.length-1].length&&cw+g+ew>w){rows.push([]);cw=0;}rows[rows.length-1].push({tm,ew});cw+=(cw?g:0)+ew;});
+    const stepY=rows.length>1?Math.min(tk+g,(h-tk)/(rows.length-1)):0,blockH=tk+(rows.length-1)*stepY;
+    rows.forEach((row,r)=>{
+      const rowW=row.reduce((a,x)=>a+x.ew,0)+g*(row.length-1);let x=zr.left-br.left+pad+(w-rowW)/2;
+      const y=zr.top-br.top+pad+Math.max(0,(h-blockH)/2)+r*stepY;
+      row.forEach(({tm,ew})=>{
+        tm.el.style.transform=`translate(${x}px,${y}px)`;x+=ew+g;
+        tm.el.classList.toggle('lead',!!startOf(tm)&&tm.rank===1);tm.el.style.zIndex=String(10+r);
+        tm.el.title=`${tm.name} · ${whereLabel(tm,now)}`;
+        if(tm.zone!==z){tm.zone=z;const tile=zoneEl[z].closest('.tile');tile.classList.remove('ping');void tile.offsetWidth;tile.classList.add('ping');}
+      });
+    });
+  }
+}
+function renderSplits(){
+  const best=Array.from({length:16},()=>Infinity);const rows=S.teams.map(tm=>({tm,sp:splitsOf(tm)}));
+  rows.forEach(({sp})=>sp.forEach((s,k)=>{if(s.ida!=null)best[2*k]=Math.min(best[2*k],s.ida);if(s.resto!=null)best[2*k+1]=Math.min(best[2*k+1],s.resto);}));
+  $('spH').innerHTML='<tr><th>Equipa</th><th>Categoria</th>'+ST.map((s,k)=>`<th class="r">Run ${k+1} ida</th><th>Volta + ${esc(s.name)}</th>`).join('')+'<th>Total</th></tr>';
+  $('spB').innerHTML=rows.sort((a,b)=>a.tm.rank-b.tm.rank).map(({tm,sp})=>'<tr><td class="name"><span class="dot" style="--c:'+tm.color+'"></span>'+esc(tm.name)+'</td><td>'+esc(tm.cat)+'</td>'+
+    sp.map((s,k)=>`<td class="${s.ida!=null&&s.ida===best[2*k]?'best':''}">${s.ida!=null?fmt(s.ida):'·'}</td><td class="${s.resto!=null&&s.resto===best[2*k+1]?'best':''}">${s.resto!=null?fmt(s.resto):'·'}</td>`).join('')+
+    `<td><b>${tm.q>=FIN?fmt(elapsed(tm)):'·'}</b></td></tr>`).join('');
+}
+
+/* Controlos */
+const selN=$('nTeams');for(let i=1;i<=60;i++){const o=document.createElement('option');o.value=i;o.textContent=i;selN.appendChild(o);}
+selN.value=cfg.n;
+selN.addEventListener('change',()=>{cfg.n=+selN.value;saveCfg();build();setupKey='';replay();render();renderPick();});
+$('cats').value=cfg.cats.join(', ');
+$('cats').addEventListener('change',()=>{const c=$('cats').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8);cfg.cats=c.length?c:['Geral'];$('cats').value=cfg.cats.join(', ');saveCfg();setupKey='';render();renderGeneral();});
+let setupKey='';
+function renderSetup(){
+  const key=JSON.stringify([cfg.n,cfg.cats,race&&race.starts]);if(key===setupKey)return;setupKey=key;
+  $('setup').innerHTML=S.teams.map((tm,i)=>{const st=startOf(tm),w=waveOf(tm.id);
+    return `<div class="trow"><span class="num" style="--c:${tm.color};--ink:${tm.ink}">${tm.id}</span>
+      <input id="tn${tm.id}" data-i="${i}" class="tn" value="${esc(tm.name)}" aria-label="Nome da dupla ${tm.id}" ${roster.length?'readonly':''}>
+      <select id="tc${tm.id}" data-i="${i}" class="tc" aria-label="Categoria da dupla ${tm.id}" ${roster.length?'disabled':''}>${cfg.cats.map(c=>`<option ${c===tm.cat?'selected':''}>${esc(c)}</option>`).join('')}</select>
+      <span class="ran">${st?`${w} · ${hms(st)}`:(heatOf(tm.id)?`H${heatOf(tm.id)} · ${heatTime(heatOf(tm.id))}`:'À espera')}</span>
+      ${st?`<div class="man"><button type="button" data-man="${tm.id}|500m" title="Picagem manual nos 500 m">500 m</button><button type="button" data-man="${tm.id}|box" title="Picagem manual na box">Box</button><button type="button" data-man="${tm.id}|meta" title="Picagem manual na meta">Meta</button></div>`:''}</div>`;}).join('');
+}
+$('setup').addEventListener('input',e=>{const i=+e.target.dataset.i;if(e.target.classList.contains('tn')){teamCfg(i).name=e.target.value.trim()||`Dupla ${i+1}`;S.teams[i].name=teamCfg(i).name;saveCfg();render();renderPick();}});
+$('setup').addEventListener('change',e=>{const i=+e.target.dataset.i;if(e.target.classList.contains('tc')){teamCfg(i).cat=e.target.value;S.teams[i].cat=e.target.value;saveCfg();}});
+$('setup').addEventListener('click',e=>{const m=e.target.dataset.man;if(m){const [t,pt]=m.split('|');manualTap(+t,pt,e.target);}});
+/* Picagem manual de recurso (quando o NFC falha) */
+const tvUndo=[];
+function paintTvUndo(){const now=Date.now();while(tvUndo.length&&now-tvUndo[0].at>5*60000)tvUndo.shift();const u=tvUndo[tvUndo.length-1],b=$('bUndo');b.disabled=!u;b.textContent=u?`Desfazer ${u.label}`:'Desfazer manual';}
+setInterval(paintTvUndo,5000);
+async function manualTap(team,pt,btn){
+  const tm=S.teams[team-1];if(!tm||!startOf(tm))return;
+  if(btn)btn.disabled=true;
+  try{const r=await fetch(`${TAP_URL}?fmt=json&d=${team}&p=${pt}&t=${Date.now()}`,{cache:'no-store'});const j=await r.json();
+    if(r.ok&&j.id){tvUndo.push({id:j.id,at:Date.now(),label:`${tm.name} · ${pt==='500m'?'500 m':pt==='box'?'Box':'Meta'}`});paintTvUndo();}
+    else{tick('warn',tm,'A picagem manual falhou, tenta outra vez',Date.now());render();}
+  }catch(e){tick('warn',tm,'Sem internet: a picagem manual não foi registada',Date.now());render();}
+  if(btn)setTimeout(()=>{btn.disabled=false;},1500);
+}
+$('bUndo').addEventListener('click',async()=>{
+  const u=tvUndo.pop();if(!u)return;
+  try{const r=await fetch(`${TAP_URL}?fmt=json&del=${u.id}`,{cache:'no-store'});if(!r.ok)throw 0;}
+  catch(e){tvUndo.push(u);tick('warn',null,'Não consegui desfazer, tenta outra vez',Date.now());render();}
+  paintTvUndo();
 });
-$('bCheck').addEventListener('click',check);
-$('bCancel').addEventListener('click',()=>{stop();show('','Escolhe uma dupla','Carrega em "Gravar" na dupla e encosta a chapinha.');});
-if(!supported){$('unsupported').hidden=false;$('bCheck').hidden=true;}
-load();
+function newRace(now){return{id:'p'+now.toString(36)+Math.random().toString(36).slice(2,6),starts:{},groups:[]};}
+/* Partida manual: o responsável do PC escolhe as duplas que saem e dá a partida */
+const sel=new Set();
+function notStarted(){return S.teams.filter(t=>!startOf(t));}
+function renderPick(){
+  [...sel].forEach(id=>{if(id>cfg.n||(race&&race.starts[id]))sel.delete(id);});
+  const ns=notStarted();let lastH=-1;
+  $('pick').innerHTML=ns.length?ns.map(tm=>{const h=heatOf(tm.id);const head=h&&h!==lastH?`<span class="pkh">H${h} · ${esc(heatTime(h))}</span>`:'';lastH=h;
+    return `${head}<button class="pk" type="button" data-pk="${tm.id}" aria-pressed="${sel.has(tm.id)}" style="--c:${tm.color}"><i></i>${tm.id} · ${esc(tm.name)}</button>`;}).join(''):'<span class="ran">Todas as duplas já partiram.</span>';
+  const nh=nextHeat();$('bNext5').textContent=nh?`Selecionar H${nh} · ${heatTime(nh)}`:'Selecionar próximas 5';$('bNext5').disabled=!ns.length;
+  const g=$('bGo');g.disabled=!sel.size;
+  g.textContent=sel.size?`Dar partida · ${selLabel()} (${sel.size} dupla${sel.size>1?'s':''})`:'Dar partida';
+  const last=race&&race.groups&&race.groups[race.groups.length-1];
+  $('sbInfo').textContent=last?`Última partida: ${gLabel(last)} às ${hms(last.at)}. Faltam partir ${ns.length} duplas.`:`Seleciona as duplas que vão sair e carrega em Dar partida. ${ns.length} duplas à espera.`;
+  const u=$('bUnStart');u.hidden=!(last&&Date.now()-last.at<120000);if(u.hidden){u.classList.remove('arm');u.textContent='Anular última partida';}
+}
+$('pick').addEventListener('click',e=>{const b=e.target.closest('.pk');if(!b)return;const id=+b.dataset.pk;sel.has(id)?sel.delete(id):sel.add(id);renderPick();});
+function nextHeat(){const ns=notStarted().map(t=>heatOf(t.id)).filter(Boolean);return ns.length?Math.min(...ns):0;}
+function selLabel(){const hs=[...new Set([...sel].map(heatOf))];return hs.length===1&&hs[0]?`H${hs[0]}`:`vaga ${(race&&race.groups?race.groups.length:0)+1}`;}
+$('bNext5').addEventListener('click',()=>{sel.clear();const nh=nextHeat();
+  (nh?notStarted().filter(t=>heatOf(t.id)===nh):notStarted().slice(0,5)).forEach(t=>sel.add(t.id));renderPick();});
+$('bClear').addEventListener('click',()=>{sel.clear();renderPick();});
+$('bGo').addEventListener('click',()=>{
+  if(!sel.size)return;const now=Date.now();race=race||newRace(now);race.groups=race.groups||[];
+  const ids=[...sel].sort((a,b)=>a-b).filter(id=>!race.starts[id]);if(!ids.length)return;
+  const n=race.groups.length+1;const label=selLabel();race.groups.push({n,at:now,ids,label:/^H/.test(label)?label:`V${n}`});
+  ids.forEach(id=>{race.starts[id]=now;const tm=S.teams[id-1];if(tm){tm.q=1;tm.times[1]=now;tm.hit=performance.now();}});
+  const L=gLabel(race.groups[race.groups.length-1]);
+  sel.clear();saveRace();tick('info',null,`Partida ${L}: ${ids.map(id=>S.teams[id-1]?.name||id).join(', ')}`,now);
+  flashStart(L);setupKey='';render();renderPick();document.body.classList.remove('showstart');
+  try{navigator.wakeLock?.request('screen').catch(()=>{});}catch(e){}
+});
+let unT;
+$('bUnStart').addEventListener('click',()=>{
+  const b=$('bUnStart'),last=race&&race.groups&&race.groups[race.groups.length-1];if(!last)return;
+  if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent=`Confirmar: anular ${gLabel(last)}?`;clearTimeout(unT);unT=setTimeout(()=>{b.classList.remove('arm');b.textContent='Anular última partida';},4000);return;}
+  clearTimeout(unT);b.classList.remove('arm');
+  last.ids.forEach(id=>{delete race.starts[id];sel.add(id);});race.groups.pop();
+  if(!race.groups.length&&!Object.keys(race.starts).length)race=null;
+  saveRace();build();setupKey='';tick('warn',null,`Partida ${gLabel(last)} anulada · as duplas voltaram a estar selecionadas`,Date.now());
+  replay();render();renderPick();
+});
+function flashStart(n){const cd=$('cd');$('cdLabel').textContent='Partida';$('cdNum').textContent=n;cd.hidden=false;clearTimeout(S.cdT);S.cdT=setTimeout(()=>{cd.hidden=true;},3500);}
+/* Duas janelas da página no mesmo browser (portátil + TV) ficam sincronizadas */
+addEventListener('storage',e=>{
+  if(e.key!=='hxpRace'&&e.key!=='hxpCfg'&&e.key!=='hxpRoster')return;roster=J('hxpRoster',roster);
+  cfg=J('hxpCfg',cfg);race=J('hxpRace',null);selN.value=cfg.n;$('cats').value=cfg.cats.join(', ');
+  build();setupKey='';replay();render();renderPick();
+  const last=race&&race.groups&&race.groups[race.groups.length-1];if(e.key==='hxpRace'&&last&&Date.now()-last.at<5000)flashStart(gLabel(last));
+});
+let armT;
+$('bReset').addEventListener('click',()=>{
+  const b=$('bReset');
+  if(!b.classList.contains('danger')){b.classList.add('danger');b.textContent='Confirmar: nova prova?';clearTimeout(armT);armT=setTimeout(()=>{b.classList.remove('danger');b.textContent='Nova prova';},4000);return;}
+  clearTimeout(armT);b.classList.remove('danger');b.textContent='Nova prova';race=null;sel.clear();saveRace();S.ticker=null;build();setupKey='';render();renderPick();
+});
+$('bSplits').addEventListener('click',()=>{$('ov').hidden=false;renderSplits();});
+$('bClose').addEventListener('click',()=>{$('ov').hidden=true;});
+$('bFull').addEventListener('click',()=>{try{const p=document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();p&&p.catch&&p.catch(()=>{});}catch(e){}});
+let toastT;
+function toggleTv(){document.body.classList.toggle('tv');const on=document.body.classList.contains('tv'),t=$('toast');clearTimeout(toastT);t.hidden=!on;if(on)toastT=setTimeout(()=>t.hidden=true,3000);}
+$('bTv').addEventListener('click',toggleTv);
+document.addEventListener('keydown',e=>{if(/INPUT|SELECT/.test(e.target.tagName))return;if(e.key==='p'||e.key==='P'){document.body.classList.toggle('showstart');renderPick();return;}if(e.key==='h'||e.key==='H')toggleTv();else if(e.key==='f'||e.key==='F')$('bFull').click();else if(e.key==='Escape')$('ov').hidden=true;});
+new ResizeObserver(()=>placeTokens()).observe(board);
+if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>placeTokens());
+
+let lastClock='';
+function clock(){
+  const on=S.teams.filter(startOf);let v='00:00';
+  if(on.length){const t0=Math.min(...on.map(startOf));const all=on.every(t=>t.q>=FIN);v=fmt(((all?Math.max(...on.map(t=>t.times[FIN])):Date.now())-t0)/1000);}
+  if(v!==lastClock){$('clock').textContent=v;lastClock=v;}
+  requestAnimationFrame(clock);
+}
+setInterval(()=>{if(S.teams.some(t=>startOf(t)&&t.q<FIN))render();},1000);
+setInterval(renderPick,10000);
+
+if(race&&!race.groups){race.groups=[];} // provas guardadas antes desta versão
+async function loadRoster(){
+  const rb=$('rost');
+  try{const {data,error}=await client.from('hyrox_sim_teams').select('team,name,category,heat,heat_time').order('team',{ascending:true});
+    if(error||!data||!data.length){rb.className='rost bad';rb.textContent=roster.length?`Lista guardada (${roster.length} equipas) · sem ligação`:'Nomes não carregados · confirma a internet e recarrega';return;}
+    roster=data;store.set('hxpRoster',JSON.stringify(data));const rb=$('rost');rb.className='rost ok';rb.textContent=`${data.length} equipas carregadas`;
+    cfg.n=Math.max(...data.map(r=>r.team));cfg.cats=[...new Set(data.map(r=>r.category))];
+    cfg.teams=Array.from({length:cfg.n},(_,i)=>{const r=data.find(x=>x.team===i+1);return r?{name:r.name,cat:r.category}:{name:`Dupla ${i+1}`,cat:cfg.cats[0]};});
+    saveCfg();selN.value=cfg.n;$('cats').value=cfg.cats.join(', ');selN.disabled=true;$('cats').readOnly=true;
+    build();setupKey='';await replay();render();renderPick();renderGeneral();
+  }catch(e){rb.className='rost bad';rb.textContent=roster.length?`Lista guardada (${roster.length} equipas) · sem ligação`:'Nomes não carregados · confirma a internet e recarrega';}
+}
+if(roster.length){selN.disabled=true;$('cats').readOnly=true;}
+build();render();renderGeneral();renderPick();requestAnimationFrame(clock);loadRoster();
 })();
 </script>
-</body>
-</html>
+</body></html>
