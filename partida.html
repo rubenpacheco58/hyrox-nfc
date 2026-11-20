@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b1320">
+<title>Partida Hyrox</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Archivo:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Comando do organizador: próximo heat e botão de partida em cima, heats em prova, picagem manual e prova nova em baixo */
+:root{
+  --floor:#0b1320; --tile:#142034; --tile-hi:#1b2a43; --line:#26375a;
+  --chalk:#eef2f8; --muted:#8e9cb6; --gold:#f2c14e; --ok:#2fbf71; --warn:#f0a43a; --bad:#e5484d;
+  --masc:#4cc9f0; --mista:#9b5de5; --fem:#f72585;
+  --f-display:'Big Shoulders Display','Arial Narrow',Impact,sans-serif;
+  --f-body:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{background:var(--floor);color:var(--chalk);font-family:var(--f-body);font-size:16px;line-height:1.4;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:16px;padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.eyebrow{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:600}
+h1{margin:0;font-family:var(--f-display);font-weight:900;text-transform:uppercase;line-height:.95;font-size:2.3rem}
+h1 span{color:var(--gold)}
+h2{margin:0;font-family:var(--f-display);font-weight:800;text-transform:uppercase;font-size:1.35rem;letter-spacing:.02em}
+p{margin:0}
+.muted{color:var(--muted);font-size:.9rem}
+button,input,select{font:inherit}
+button{font-weight:700;color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:8px;padding:10px 14px;cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+button:disabled{opacity:.45;cursor:default}
+input,select{color:var(--chalk);background:var(--tile-hi);border:1px solid var(--line);border-radius:8px;padding:10px 12px;min-width:0}
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--warn)}
+.chip.ok i{background:var(--ok)}
+.card{background:var(--tile);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.err{background:rgba(229,72,77,.12);border:1px solid var(--bad);border-radius:10px;padding:12px;color:#ffd7d8}
+
+/* PIN */
+.pin{display:flex;gap:8px}
+.pin input{flex:1;font-size:1.4rem;letter-spacing:.3em;text-align:center}
+
+/* Próximo heat */
+.next{border:2px solid var(--gold)}
+.nh{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.nh b{font-family:var(--f-display);font-weight:900;font-size:2.4rem;line-height:.9;color:var(--gold)}
+.nh .cat{font-size:.75rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--c)}
+.teams{display:flex;flex-wrap:wrap;gap:6px}
+.tm{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;font-weight:600;font-size:.95rem;border-radius:999px}
+.tm .n{font-family:var(--f-display);font-weight:900;font-size:1.1rem;color:var(--muted)}
+.tm[aria-pressed="true"]{background:var(--gold);color:var(--floor);border-color:var(--gold)}
+.tm[aria-pressed="true"] .n{color:var(--floor)}
+.hh{flex-basis:100%;font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);font-weight:700;padding-top:6px}
+.go{font-family:var(--f-display);font-weight:900;font-size:1.9rem;text-transform:uppercase;letter-spacing:.02em;padding:18px;border:0;background:var(--gold);color:var(--floor);border-radius:12px}
+.go:active{transform:scale(.99)}
+.flash{border-radius:12px;padding:14px 16px;font-weight:700;display:flex;flex-direction:column;gap:8px}
+.flash.ok{background:var(--ok);color:#06210f}
+.flash.bad{background:var(--bad);color:#fff}
+.flash .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.flash button{background:rgba(0,0,0,.18);border-color:rgba(0,0,0,.25);color:inherit}
+.flash button.arm{background:var(--floor);color:var(--chalk)}
+.link{background:none;border:0;padding:0;color:var(--gold);text-decoration:underline;font-weight:600;cursor:pointer}
+
+/* Heats em prova */
+.heats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.heats li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.heats li:first-child{border-top:0}
+.heats b{font-family:var(--f-display);font-weight:900;font-size:1.4rem}
+.heats .t{font-family:var(--f-display);font-weight:800;font-size:1.3rem;font-variant-numeric:tabular-nums}
+.heats small{display:block;color:var(--muted);font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* Manual */
+.mrow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.mrow button{padding:14px 6px;font-size:1.05rem}
+.when{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.when button{padding:8px 4px;font-size:.85rem}
+.when button[aria-pressed="true"]{background:var(--chalk);color:var(--floor);border-color:var(--chalk)}
+.danger{border-color:var(--bad);color:#ffb3b5;background:transparent}
+.danger.arm{background:var(--bad);color:#fff}
+.links{display:flex;gap:14px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div><span class="eyebrow">Simulação Hyrox · organizador</span><h1>Partida</h1></div>
+    <span class="chip" id="conn"><i></i><span id="connTxt">A ligar…</span></span>
+  </header>
+
+  <section class="card" id="pinBox" hidden>
+    <h2>PIN do organizador</h2>
+    <p class="muted">Só quem tem o PIN pode dar partidas. Fica guardado neste telemóvel.</p>
+    <div class="pin"><input id="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="PIN"><button id="bPin" type="button">Entrar</button></div>
+    <p class="muted" id="pinMsg"></p>
+  </section>
+
+  <div id="app" hidden>
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <section class="card next" id="nextCard">
+        <span class="eyebrow">Próximo heat</span>
+        <div class="nh" id="nh"></div>
+        <div class="teams" id="pick"></div>
+        <button class="go" id="bGo" type="button" disabled>Dar partida</button>
+        <div id="flash" hidden></div>
+        <button class="link" id="bOther" type="button">Escolher outras equipas</button>
+        <div id="others" hidden style="display:flex;flex-direction:column;gap:8px">
+          <p class="muted">Toca nas equipas para as juntar ou tirar desta partida (por exemplo, uma equipa atrasada de outro heat).</p>
+          <div class="teams" id="all"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Em prova</h2>
+        <ul class="heats" id="heats"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Picagem manual</h2>
+        <p class="muted">Para quando uma chapinha falha ou um telemóvel fica sem rede. Conta como se a equipa tivesse picado nesse ponto.</p>
+        <select id="mTeam" aria-label="Equipa"></select>
+        <div class="when" id="when">
+          <button type="button" data-off="0" aria-pressed="true">Agora</button>
+          <button type="button" data-off="30" aria-pressed="false">Há 30 s</button>
+          <button type="button" data-off="60" aria-pressed="false">Há 1 min</button>
+          <button type="button" data-off="120" aria-pressed="false">Há 2 min</button>
+        </div>
+        <div class="mrow">
+          <button type="button" data-p="500m">500 m</button>
+          <button type="button" data-p="box">Box</button>
+          <button type="button" data-p="meta">Meta</button>
+        </div>
+        <div class="row" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button id="bUndoTap" type="button" disabled>Desfazer</button><span class="muted" id="mMsg"></span></div>
+      </section>
+
+      <section class="card">
+        <h2>Prova nova</h2>
+        <p class="muted">Apaga todas as partidas e põe a TV a zero. Usar só antes do primeiro heat, se houve testes, ou no fim do evento.</p>
+        <button class="danger" id="bReset" type="button">Começar prova nova</button>
+      </section>
+
+      <div class="links">
+        <a href="hyrox-tv.html" target="_blank" rel="noopener">Abrir a TV</a>
+        <a href="resultados.html" target="_blank" rel="noopener">Resultados</a>
+        <button class="link" id="bLogout" type="button">Sair (esquecer PIN)</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+(function(){
+const SB_URL='https://cxxufzwgkvqlnexabvnf.supabase.co';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4eHVmendna3ZxbG5leGFidm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4MDUxMDQsImV4cCI6MjEwOTM4MTEwNH0.XrTcailh4rHK-IxN6IdFaNNRiTHrRJ5LBfM9Zyt2q7I';
+const RACE_FN=SB_URL+'/functions/v1/hyrox-race', TAP_FN=SB_URL+'/functions/v1/hyrox-tap';
+const CAT={'Dupla Masculina':'var(--masc)','Dupla Mista':'var(--mista)','Dupla Feminina':'var(--fem)'};
+const $=id=>document.getElementById(id);
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}};
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function fmt(s){s=Math.max(0,Math.floor(s));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;const p=n=>String(n).padStart(2,'0');return h?`${h}:${p(m)}:${p(x)}`:`${p(m)}:${p(x)}`;}
+function hms(ms){return new Date(ms).toLocaleTimeString('pt-PT',{hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+
+let pin=store.get('hx_pin')||'',roster=[],race=null,sel=new Set(),selHeat=0,busy=false;
+const client=supabase.createClient(SB_URL,SB_KEY);
+const nameOf=id=>(roster.find(r=>r.team===id)||{}).name||`Equipa ${id}`;
+const heatOf=id=>(roster.find(r=>r.team===id)||{}).heat||0;
+const started=id=>!!(race&&race.starts&&race.starts[id]);
+
+async function call(action,extra){
+  const r=await fetch(RACE_FN,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pin,action,...(extra||{})}),cache:'no-store'});
+  let j={};try{j=await r.json();}catch(e){}
+  return {status:r.status,...j};
+}
+
+/* PIN */
+async function tryPin(p){
+  pin=p;$('pinMsg').textContent='A confirmar…';
+  try{const r=await call('ping');
+    if(r.status===401){$('pinMsg').textContent='PIN errado. Tenta outra vez.';store.set('hx_pin',null);return false;}
+    if(!r.ok)throw 0;store.set('hx_pin',pin);race=r.data||null;$('pinBox').hidden=true;$('app').hidden=false;paint();return true;
+  }catch(e){$('pinMsg').textContent='Sem ligação ao servidor. Confirma a internet.';return false;}
+}
+$('bPin').addEventListener('click',()=>tryPin($('pin').value.trim()));
+$('pin').addEventListener('keydown',e=>{if(e.key==='Enter')$('bPin').click();});
+$('bLogout').addEventListener('click',()=>{store.set('hx_pin',null);location.reload();});
+
+/* Dados */
+async function loadRoster(){
+  const {data,error}=await client.from('hyrox_sim_teams').select('team,name,category,heat,heat_time').order('team',{ascending:true});
+  if(!error&&data)roster=data;
+}
+async function loadRace(){
+  const {data,error}=await client.from('hyrox_sim_race').select('data').eq('id','current').maybeSingle();
+  if(!error){race=data?data.data:null;paint();}
+}
+function setConn(ok){$('conn').classList.toggle('ok',ok);$('connTxt').textContent=ok?'Ligado':'Sem ligação';}
+client.channel('partida').on('postgres_changes',{event:'*',schema:'public',table:'hyrox_sim_race'},p=>{race=p.new?p.new.data:null;paint();})
+  .subscribe(st=>{if(st==='SUBSCRIBED'){setConn(true);loadRace();}else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED')setConn(false);});
+setInterval(()=>{if(!$('app').hidden)loadRace();},15000);
+
+/* Desenho */
+function nextHeat(){const hs=roster.filter(r=>!started(r.team)).map(r=>r.heat);return hs.length?Math.min(...hs):0;}
+function selLabel(){const hs=[...new Set([...sel].map(heatOf))];return hs.length===1&&hs[0]?`H${hs[0]}`:'';}
+function paint(){
+  if($('app').hidden)return;
+  [...sel].forEach(id=>{if(started(id))sel.delete(id);});
+  const nh=nextHeat();
+  if(nh!==selHeat){selHeat=nh;sel=new Set(roster.filter(r=>r.heat===nh&&!started(r.team)).map(r=>r.team));}
+  const hr=roster.filter(r=>r.heat===nh);
+  $('nh').innerHTML=nh?`<b>H${nh}</b><span>${esc(hr[0]?.heat_time||'')}</span><span class="cat" style="--c:${CAT[hr[0]?.category]||'var(--gold)'}">${esc(hr[0]?.category||'')}</span>`:'<b>Todas partiram</b>';
+  const heatTeams=roster.filter(r=>r.heat===nh&&!started(r.team));
+  const extra=[...sel].filter(id=>heatOf(id)!==nh).map(id=>roster.find(r=>r.team===id)).filter(Boolean);
+  $('pick').innerHTML=[...heatTeams,...extra].map(r=>`<button class="tm" type="button" data-t="${r.team}" aria-pressed="${sel.has(r.team)}"><span class="n">${r.team}</span>${esc(r.name)}</button>`).join('')||'<span class="muted">Não há equipas à espera.</span>';
+  let lastH=-1;
+  $('all').innerHTML=roster.filter(r=>!started(r.team)).map(r=>{const h=r.heat!==lastH?`<span class="hh">H${r.heat} · ${esc(r.heat_time)}</span>`:'';lastH=r.heat;return `${h}<button class="tm" type="button" data-t="${r.team}" aria-pressed="${sel.has(r.team)}"><span class="n">${r.team}</span>${esc(r.name)}</button>`;}).join('')||'<span class="muted">Todas as equipas já partiram.</span>';
+  const g=$('bGo'),lab=selLabel();g.disabled=!sel.size||busy;
+  g.textContent=sel.size?`Dar partida${lab?' '+lab:''} · ${sel.size} equipa${sel.size>1?'s':''}`:'Seleciona as equipas';
+  // heats em prova
+  const groups=(race&&race.groups)||[];
+  $('heats').innerHTML=groups.length?[...groups].reverse().map(gr=>`<li><b>${esc(gr.label)}</b><span><span>Partiu às ${hms(gr.at)}</span><small>${gr.ids.map(id=>esc(nameOf(id))).join(' · ')}</small></span><span class="t" data-at="${gr.at}">${fmt((Date.now()-gr.at)/1000)}</span></li>`).join(''):'<li><span></span><span class="muted">Ainda não houve partidas.</span><span></span></li>';
+  // equipas para picagem manual (só as que já partiram)
+  const ms=$('mTeam'),cur=ms.value;
+  const st=roster.filter(r=>started(r.team));
+  ms.innerHTML=st.length?st.map(r=>`<option value="${r.team}">${r.team} · ${esc(r.name)} (H${r.heat})</option>`).join(''):'<option value="">Nenhuma equipa em prova</option>';
+  if(cur&&st.some(r=>String(r.team)===cur))ms.value=cur;
+  document.querySelectorAll('.mrow button').forEach(b=>b.disabled=!st.length);
+}
+setInterval(()=>{document.querySelectorAll('.heats .t').forEach(el=>{el.textContent=fmt((Date.now()-(+el.dataset.at))/1000);});},1000);
+function toggleSel(e){const b=e.target.closest('.tm');if(!b)return;const id=+b.dataset.t;sel.has(id)?sel.delete(id):sel.add(id);paint();}
+$('pick').addEventListener('click',toggleSel);$('all').addEventListener('click',toggleSel);
+$('bOther').addEventListener('click',()=>{const o=$('others');o.hidden=!o.hidden;$('bOther').textContent=o.hidden?'Escolher outras equipas':'Fechar a lista';});
+
+/* Dar partida e anular */
+let lastStart=null,armU;
+function flash(kind,html){const f=$('flash');f.className='flash '+kind;f.innerHTML=html;f.hidden=false;}
+$('bGo').addEventListener('click',async()=>{
+  if(!sel.size||busy)return;busy=true;paint();
+  const ids=[...sel],label=selLabel();
+  try{const r=await call('start',{ids,label});
+    if(r.ok){race=r.data;lastStart=race.groups[race.groups.length-1];try{navigator.vibrate&&navigator.vibrate(150);}catch(e){}
+      flash('ok',`<div>Partida ${esc(lastStart.label)} às ${hms(lastStart.at)}</div><div class="row"><span>${lastStart.ids.map(id=>esc(nameOf(id))).join(' · ')}</span><button id="bUndo" type="button">Anular esta partida</button></div>`);
+      setTimeout(()=>{if(lastStart&&Date.now()-lastStart.at>120000)$('flash').hidden=true;},121000);}
+    else flash('bad',`<div>${esc(r.msg||'Não deu partida.')}</div>`);
+  }catch(e){flash('bad','<div>Sem ligação: a partida NÃO foi dada. Confirma a internet e carrega outra vez.</div>');}
+  busy=false;paint();
+});
+$('flash').addEventListener('click',async e=>{
+  const b=e.target.closest('#bUndo');if(!b)return;
+  if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='Confirmar: anular?';clearTimeout(armU);armU=setTimeout(()=>{b.classList.remove('arm');b.textContent='Anular esta partida';},4000);return;}
+  clearTimeout(armU);
+  try{const r=await call('undo');if(r.ok){race=r.data;if(r.undone){selHeat=-1;}flash('ok',`<div>${esc(r.msg)} As equipas voltaram a estar à espera.</div>`);lastStart=null;}
+    else flash('bad',`<div>${esc(r.msg||'Não deu para anular.')}</div>`);}
+  catch(err){flash('bad','<div>Sem ligação. Tenta outra vez.</div>');}
+  paint();
+});
+
+/* Picagem manual */
+let off=0;const undoTaps=[];
+$('when').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;off=+b.dataset.off;document.querySelectorAll('#when button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));});
+document.querySelector('.mrow').addEventListener('click',async e=>{
+  const b=e.target.closest('button');if(!b)return;const team=+$('mTeam').value;if(!team)return;
+  const p=b.dataset.p,label=b.textContent;b.disabled=true;
+  try{const r=await fetch(`${TAP_FN}?fmt=json&d=${team}&p=${p}&t=${Date.now()-off*1000}`,{cache:'no-store'});const j=await r.json();
+    if(r.ok&&j.id){undoTaps.push({id:j.id,txt:`${nameOf(team)} · ${label}`});$('mMsg').textContent=`Registado: ${nameOf(team)} · ${label}${off?` (há ${off<60?off+' s':off/60+' min'})`:''}`;}
+    else $('mMsg').textContent='Não registou. Tenta outra vez.';}
+  catch(err){$('mMsg').textContent='Sem ligação: não registou.';}
+  off=0;document.querySelectorAll('#when button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.off==='0')));
+  paintUndo();setTimeout(()=>{b.disabled=false;},1200);
+});
+function paintUndo(){const u=undoTaps[undoTaps.length-1],b=$('bUndoTap');b.disabled=!u;b.textContent=u?`Desfazer ${u.txt}`:'Desfazer';}
+let armT;
+$('bUndoTap').addEventListener('click',async()=>{
+  const b=$('bUndoTap'),u=undoTaps[undoTaps.length-1];if(!u)return;
+  if(!b.classList.contains('danger')){b.classList.add('danger');b.textContent='Confirmar: desfazer?';clearTimeout(armT);armT=setTimeout(()=>{b.classList.remove('danger');paintUndo();},4000);return;}
+  clearTimeout(armT);b.classList.remove('danger');
+  try{const r=await fetch(`${TAP_FN}?fmt=json&del=${u.id}`,{cache:'no-store'});if(r.ok){undoTaps.pop();$('mMsg').textContent=`Desfeito: ${u.txt}`;}else{const j=await r.json();$('mMsg').textContent=j.msg||'Não deu para desfazer.';}}
+  catch(err){$('mMsg').textContent='Sem ligação. Tenta outra vez.';}
+  paintUndo();
+});
+
+/* Prova nova */
+let armR;
+$('bReset').addEventListener('click',async()=>{
+  const b=$('bReset');
+  if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='Confirmar: apagar as partidas e pôr a TV a zero?';clearTimeout(armR);armR=setTimeout(()=>{b.classList.remove('arm');b.textContent='Começar prova nova';},5000);return;}
+  clearTimeout(armR);b.classList.remove('arm');b.textContent='Começar prova nova';
+  try{const r=await call('reset');if(r.ok){race=null;selHeat=-1;lastStart=null;$('flash').hidden=true;paint();flash('ok','<div>Prova nova: a TV voltou a zero.</div>');}else flash('bad',`<div>${esc(r.msg||'Não deu.')}</div>`);}
+  catch(e){flash('bad','<div>Sem ligação. Tenta outra vez.</div>');}
+});
+
+(async()=>{await loadRoster();if(pin){if(!(await tryPin(pin)))$('pinBox').hidden=false;}else $('pinBox').hidden=false;})();
+})();
+</script>
+</body>
+</html>

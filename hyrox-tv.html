@@ -121,6 +121,7 @@ tr.hit td{animation:hit 1.4s ease-out}
   box-shadow:0 0 0 2px var(--floor),0 5px 10px rgba(0,0,0,.55);transition:transform .85s cubic-bezier(.34,1.4,.5,1);will-change:transform}
 .many .tok{--tok:clamp(18px,2.6vh,30px)}
 .tok.num{width:var(--tok);padding:0;text-align:center;font-family:var(--f-display);font-weight:900;font-size:calc(var(--tok) * .56);border-radius:50%}
+.many .tok.num{width:calc(var(--tok) * .82);height:calc(var(--tok) * .82);line-height:calc(var(--tok) * .82);font-size:calc(var(--tok) * .46)}
 .rost{font-size:.8em;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted)}
 .rost.ok{border-color:var(--ok);color:var(--ok)}
 .rost.bad{border-color:var(--live);color:#fff;background:var(--live)}
@@ -140,6 +141,9 @@ button.tap{min-width:34px;padding:6px 8px;background:var(--c);color:var(--ink);b
 .note{font-size:.78em;color:var(--muted);flex-basis:100%}
 .note kbd{font-family:inherit;font-weight:700;color:var(--chalk);border:1px solid var(--line);border-radius:3px;padding:0 4px}
 body.tv .controls{display:none}
+/* Página só de visualização: os controlos estão na página da partida (partida.html) */
+.controls,.startbox,.toast{display:none!important}
+.status .rost.ok{display:none}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--chalk);color:var(--floor);font-weight:600;padding:8px 14px;border-radius:6px;box-shadow:0 8px 20px rgba(0,0,0,.4);transition:opacity .4s}
 .toast[hidden]{display:none!important}
 
@@ -241,7 +245,7 @@ body.tv.showstart .startbox{display:flex;position:fixed;z-index:300;left:max(16p
 input.sm{width:4.2em}
 @media (max-width:860px){.center{grid-template-columns:minmax(0,1fr)}}
 </style>
-</head><body>
+</head><body class="tv">
 <div class="app">
   <header class="top">
     <div class="brand">
@@ -249,6 +253,7 @@ input.sm{width:4.2em}
       <h1>Simulação <span>Hyrox</span></h1>
     </div>
     <div class="status">
+      <span class="rost" id="rost">A carregar equipas…</span>
       <span class="conn" id="conn"><i></i><span id="connTxt">A ligar…</span></span>
       <div class="counts"><span><b id="cRace">0</b> em prova</span><span><b id="cFin">0</b> terminaram</span></div>
       <span class="live" id="live"><i></i><span id="liveTxt">Antes da partida</span></span>
@@ -280,7 +285,7 @@ input.sm{width:4.2em}
 
   <section class="startbox" id="startbox" aria-label="Partida">
     <div class="sbhead"><b>Partida</b><span id="sbInfo">Seleciona as duplas que vão sair e carrega em Dar partida.</span>
-      <span class="rost" id="rost">A carregar equipas…</span><button id="bNext5" type="button">Selecionar próximo heat</button><button id="bClear" type="button">Limpar seleção</button></div>
+      <button id="bNext5" type="button">Selecionar próximo heat</button><button id="bClear" type="button">Limpar seleção</button></div>
     <div class="pick" id="pick"></div>
     <div class="sbact"><button class="primary" id="bGo" type="button" disabled>Dar partida</button><button id="bUnStart" type="button" hidden>Anular última partida</button></div>
   </section>
@@ -353,9 +358,9 @@ board.querySelectorAll('.zone').forEach(z=>zoneEl[z.dataset.z]=z);
 
 /* Configuração guardada neste computador */
 let cfg=J('hxpCfg',null)||{n:5,cats:['Dupla Masculina','Dupla Feminina','Dupla Mista'],teams:[]};
-let race=J('hxpRace',null);
+let race=null; // a prova (partidas por heat) vem da base de dados, gerida na página da partida
 function saveCfg(){store.set('hxpCfg',JSON.stringify(cfg));}
-function saveRace(){store.set('hxpRace',race?JSON.stringify(race):null);}
+function saveRace(){} // a TV não grava nada: só mostra
 function teamCfg(i){cfg.teams[i]=cfg.teams[i]||{name:`Dupla ${i+1}`,cat:cfg.cats[0]||'Geral'};return cfg.teams[i];}
 function startOf(tm){return race&&race.starts[tm.id];}
 /* Lista oficial das duplas (nomes, categorias e heats), lida da base de dados */
@@ -487,7 +492,8 @@ client.channel('hyrox-prova')
     apply(p.new);render();})
   .on('postgres_changes',{event:'DELETE',schema:'public',table:'hyrox_sim_taps'},()=>{build();setupKey='';replay().then(()=>{tick('info',null,'Uma picagem foi desfeita · classificação recalculada',Date.now());render();});})
   .on('postgres_changes',{event:'INSERT',schema:'public',table:'hyrox_sim_results'},p=>{newIds.add(p.new.id);results.push(p.new);results.sort((a,b)=>a.total_secs-b.total_secs);catIdx=Math.max(0,catsWithResults().indexOf(p.new.category));renderGeneral();})
-  .subscribe(st=>{if(st==='SUBSCRIBED'){setConn(true);replay();loadResults();}else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED')setConn(false);});
+  .on('postgres_changes',{event:'*',schema:'public',table:'hyrox_sim_race'},p=>applyRace(p.new?p.new.data:null))
+  .subscribe(st=>{if(st==='SUBSCRIBED'){setConn(true);loadRace();loadResults();}else if(st==='CHANNEL_ERROR'||st==='TIMED_OUT'||st==='CLOSED')setConn(false);});
 
 /* Desenho */
 function elapsed(tm){const st=startOf(tm);if(!st)return 0;return((tm.q>=FIN?tm.times[FIN]:Date.now())-st)/1000;}
@@ -667,13 +673,23 @@ $('bUnStart').addEventListener('click',()=>{
   replay();render();renderPick();
 });
 function flashStart(n){const cd=$('cd');$('cdLabel').textContent='Partida';$('cdNum').textContent=n;cd.hidden=false;clearTimeout(S.cdT);S.cdT=setTimeout(()=>{cd.hidden=true;},3500);}
-/* Duas janelas da página no mesmo browser (portátil + TV) ficam sincronizadas */
-addEventListener('storage',e=>{
-  if(e.key!=='hxpRace'&&e.key!=='hxpCfg'&&e.key!=='hxpRoster')return;roster=J('hxpRoster',roster);
-  cfg=J('hxpCfg',cfg);race=J('hxpRace',null);selN.value=cfg.n;$('cats').value=cfg.cats.join(', ');
-  build();setupKey='';replay();render();renderPick();
-  const last=race&&race.groups&&race.groups[race.groups.length-1];if(e.key==='hxpRace'&&last&&Date.now()-last.at<5000)flashStart(gLabel(last));
-});
+/* Partidas dadas na página da partida chegam aqui em tempo real */
+function applyRace(data){
+  const prev=race;race=data&&typeof data==='object'?data:null;if(race&&!race.groups)race.groups=[];
+  const sameRace=prev&&race&&prev.id===race.id;
+  const newGroup=race&&race.groups.length&&(!sameRace?Date.now()-race.groups[race.groups.length-1].at<8000:race.groups.length>(prev.groups||[]).length);
+  if(!race||(prev&&!sameRace))S.ticker=null;
+  build();setupKey='';
+  if(newGroup){const g=race.groups[race.groups.length-1];flashStart(gLabel(g));tick('info',null,`Partida ${gLabel(g)}: ${g.ids.map(id=>S.teams[id-1]?.name||id).join(', ')}`,g.at);}
+  if(prev&&!race)tick('info',null,'Prova recomeçada · à espera da primeira partida',Date.now());
+  replay();render();
+}
+async function loadRace(){
+  try{const {data,error}=await client.from('hyrox_sim_race').select('data').eq('id','current').maybeSingle();
+    if(!error){const d=data?data.data:null;if(JSON.stringify(d)!==JSON.stringify(race))applyRace(d);else replay();}else replay();}
+  catch(e){replay();}
+}
+setInterval(loadRace,30000); // rede de segurança, caso uma atualização em tempo real se perca
 let armT;
 $('bReset').addEventListener('click',()=>{
   const b=$('bReset');
@@ -686,7 +702,8 @@ $('bFull').addEventListener('click',()=>{try{const p=document.fullscreenElement?
 let toastT;
 function toggleTv(){document.body.classList.toggle('tv');const on=document.body.classList.contains('tv'),t=$('toast');clearTimeout(toastT);t.hidden=!on;if(on)toastT=setTimeout(()=>t.hidden=true,3000);}
 $('bTv').addEventListener('click',toggleTv);
-document.addEventListener('keydown',e=>{if(/INPUT|SELECT/.test(e.target.tagName))return;if(e.key==='p'||e.key==='P'){document.body.classList.toggle('showstart');renderPick();return;}if(e.key==='h'||e.key==='H')toggleTv();else if(e.key==='f'||e.key==='F')$('bFull').click();else if(e.key==='Escape')$('ov').hidden=true;});
+document.addEventListener('keydown',e=>{if(/INPUT|SELECT/.test(e.target.tagName))return;if(e.key==='f'||e.key==='F')$('bFull').click();else if(e.key==='s'||e.key==='S'){const o=$('ov');o.hidden=!o.hidden;if(!o.hidden)renderSplits();}else if(e.key==='Escape')$('ov').hidden=true;});
+document.addEventListener('dblclick',()=>$('bFull').click()); // duplo clique: ecrã inteiro
 new ResizeObserver(()=>placeTokens()).observe(board);
 if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>placeTokens());
 
