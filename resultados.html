@@ -145,7 +145,11 @@ function renderTeam(){
   const inCat=data.filter(r=>r.category===me.category);const posCat=inCat.indexOf(me)+1;
   // melhor e mais lento de cada segmento na categoria da dupla
   const segs=[];
-  for(let k=0;k<8;k++){segs.push({run:true,k,lab:`Run ${k+1} · até aos 500 m`,sub:'Ida',key:'ida'});segs.push({run:false,k,lab:k===7?'Volta + Wall Balls':`Volta + ${ST[k]}`,sub:k===7?'Até à meta':'Até à picagem na box',key:'resto'});}
+  const exact=(me.splits||[]).some(x=>x&&('run' in x||'st' in x)); // formato novo: run e estação separados
+  for(let k=0;k<8;k++){
+    if(exact){segs.push({run:true,k,lab:`Run ${k+1}`,sub:'1 km, da saída da box à entrada seguinte',key:'run'});segs.push({run:false,k,lab:ST[k],sub:k===7?'Da entrada na box à meta':'Da entrada à saída da box',key:'st'});}
+    else{segs.push({run:true,k,lab:`Run ${k+1} · até aos 500 m`,sub:'Ida',key:'ida'});segs.push({run:false,k,lab:k===7?'Volta + Wall Balls':`Volta + ${ST[k]}`,sub:k===7?'Até à meta':'Até à picagem na box',key:'resto'});}
+  }
   segs.forEach(s=>{const vals=inCat.map(r=>r.splits?.[s.k]?.[s.key]).filter(v=>v!=null);s.best=vals.length?Math.min(...vals):null;s.max=vals.length?Math.max(...vals):null;s.v=me.splits?.[s.k]?.[s.key]??null;});
   const scale=Math.max(...segs.map(s=>s.max||0),1);
   $('main').innerHTML=`
@@ -160,7 +164,7 @@ function renderTeam(){
     </section>
     <section style="display:flex;flex-direction:column;gap:10px">
       <h2>Parciais</h2>
-      <div class="legend"><span><i style="background:var(--track)"></i>Corrida até aos 500 m</span><span><i style="background:var(--chalk)"></i>Volta + estação</span><span><i style="background:var(--ok);width:3px"></i>Melhor da categoria</span></div>
+      <div class="legend"><span><i style="background:var(--track)"></i>${exact?'Run':'Corrida até aos 500 m'}</span><span><i style="background:var(--chalk)"></i>${exact?'Estação':'Volta + estação'}</span><span><i style="background:var(--ok);width:3px"></i>Melhor da categoria</span></div>
       <ol class="segs">${segs.map(s=>{
         const miss=s.v==null;const diff=!miss&&s.best!=null?s.v-s.best:null;
         const note=miss?'Sem picagem':diff<=0?'<small class="best">Melhor da categoria</small>':`<small>+${fmt(diff)} do melhor</small>`;
@@ -169,7 +173,7 @@ function renderTeam(){
           <span class="t">${miss?'·':fmt(s.v)}${miss?'<small>Sem picagem</small>':note}</span>
           <span class="bar" aria-hidden="true">${miss?'':`<i style="width:${(s.v/scale*100).toFixed(1)}%"></i>`}${s.best!=null?`<em style="left:${(s.best/scale*100).toFixed(1)}%"></em>`:''}</span>
         </li>`;}).join('')}</ol>
-      <p class="muted">Cada parcial vai de uma picagem à seguinte. A "volta + estação" junta o regresso da corrida, a roxzone e a estação, porque só se pica no fim de cada estação.</p>
+      <p class="muted">${exact?'Cada parcial vai de uma picagem à seguinte: a run conta da saída da box até voltares a entrar, e a estação da entrada até à saída (no Wall Balls, até à meta).':'Cada parcial vai de uma picagem à seguinte. A "volta + estação" junta o regresso da corrida, a roxzone e a estação.'}</p>
     </section>
     <a href="${link(0)}">Ver a classificação completa</a>
   </div>`;

@@ -326,12 +326,12 @@ input.sm{width:4.2em}
 const SB_URL='https://cxxufzwgkvqlnexabvnf.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4eHVmendna3ZxbG5leGFidm5mIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTM4MDUxMDQsImV4cCI6MjEwOTM4MTEwNH0.XrTcailh4rHK-IxN6IdFaNNRiTHrRJ5LBfM9Zyt2q7I';
 const TAP_URL=SB_URL+'/functions/v1/hyrox-tap';
-const DUP=90;   // segundos: nova picagem no mesmo ponto antes disto é repetida
+const DUP=25;   // segundos: nova picagem da mesma equipa no mesmo ponto antes disto é repetida
 const ST=[
   {name:'SkiErg',std:'1000 m'},{name:'Sled Push',std:'50 m'},{name:'Sled Pull',std:'50 m'},{name:'Burpee Broad Jumps',std:'80 m'},
   {name:'Rowing',std:'1000 m'},{name:'Farmers Carry',std:'200 m'},{name:'Sandbag Lunges',std:'100 m'},{name:'Wall Balls',std:'100 reps'}];
 const COLORS=['#4cc9f0','#f72585','#a7e05a','#ff7b54','#9b5de5','#3d5afe','#14b8a6','#e5e7eb','#ffd166','#06d6a0','#ef476f','#118ab2'];
-const FIN=17; // fases: 2k+1 = Run k ida · 2k+2 = Run k volta + estação k · 17 = meta
+const FIN=25; // fases: 3k+1 = Run k ida · 3k+2 = Run k volta · 3k+3 = dentro da estação k · 25 = meta
 const $=id=>document.getElementById(id);
 const board=$('board'),tokLayer=$('tokens');
 const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(e){}}};
@@ -385,33 +385,31 @@ function build(){
   S.seen=new Set();
 }
 
-/* Onde está: depois dos 500 m, a passagem para a estação é estimada (volta = ida) */
-function inStation(tm,now){
-  if(tm.q<=0||tm.q>=FIN||tm.q%2===1)return false;
-  const k=(tm.q-2)/2,t500=tm.times[tm.q],ida=tm.times[tm.q-1];
-  if(!t500)return true;
-  const est=ida?Math.min(Math.max(t500-ida,60000),420000):180000;
-  return now>=t500+est;
-}
-function zoneOf(tm,now){
+/* Onde está. Picagens: 500 m (viragem) · box à entrada (fim da run, começa a estação) · box à saída (fim da estação, começa a run) · meta (fim do Wall Balls) */
+function zoneOf(tm){
   const q=tm.q;if(q<=0)return'start';if(q>=FIN)return'finish';
-  const k=Math.floor((q-1)/2);
-  if(q%2===1)return`run${k}o`;
-  return inStation(tm,now)?`st${k}`:`run${k}b`;
+  const k=Math.floor((q-1)/3),r=(q-1)%3;
+  return r===0?`run${k}o`:r===1?`run${k}b`:`st${k}`;
 }
-function whereLabel(tm,now){
+function whereLabel(tm){
   const q=tm.q;if(!startOf(tm))return'À espera';if(q>=FIN)return'Terminou';
-  const k=Math.floor((q-1)/2);
-  if(q%2===1)return`Run ${k+1} · ida`;
-  return inStation(tm,now)?ST[k].name:`Run ${k+1} · volta`;
+  const k=Math.floor((q-1)/3),r=(q-1)%3;
+  return r===0?`Run ${k+1} · ida`:r===1?`Run ${k+1} · volta`:ST[k].name;
 }
 
 /* Picagens */
 function tick(type,tm,msg,ms){S.ticker={type,tm,msg,ms};}
 function go(tm,q,ms){tm.q=q;tm.times[q]=ms;tm.hit=performance.now();}
+function enterStation(tm,k,ms,warn){ // entrada na box: fim da run k, começa a estação k
+  const rs=tm.times[3*k+1];if(rs)tm.lastSplit={label:`Run ${k+1}`,secs:(ms-rs)/1000};
+  go(tm,3*k+3,ms);tick(warn?'warn':'station',tm,warn||`Entrou no ${ST[k].name}${rs?` · Run ${k+1} em ${fmt((ms-rs)/1000)}`:''}`,ms);
+}
+function leaveStation(tm,k,ms){ // saída da box: fim da estação k, começa a run k+1
+  const es=tm.times[3*k+3];if(es)tm.lastSplit={label:ST[k].name,secs:(ms-es)/1000};
+  go(tm,3*k+4,ms);tick('station',tm,`${ST[k].name} feito${es?` em ${fmt((ms-es)/1000)}`:''} · sai para a Run ${k+2}`,ms);
+}
 function finish(tm,ms,warn){
-  const k=7,ida=tm.times[16];
-  if(ida)tm.lastSplit={label:'Volta + Wall Balls',secs:(ms-ida)/1000};
+  const es=tm.times[24];if(es&&tm.q===24)tm.lastSplit={label:'Wall Balls',secs:(ms-es)/1000};
   go(tm,FIN,ms);tick(warn?'warn':'finish',tm,warn||`Cortou a meta · ${fmt((ms-startOf(tm))/1000)}`,ms);saveResult(tm);
 }
 function apply(row){
@@ -419,39 +417,36 @@ function apply(row){
   const tm=S.teams[row.team-1];const ms=Date.parse(row.created_at);
   if(!tm){tick('warn',null,`Chapinha ${row.team} não está em prova`,ms);return;}
   const st=startOf(tm);if(!st||ms<st||tm.q>=FIN)return;
-  const q=tm.q,k=Math.floor((q-1)/2),since=(ms-(tm.times[q]||st))/1000;
+  const q=tm.q,k=Math.floor((q-1)/3),r=(q-1)%3,since=(ms-(tm.times[q]||st))/1000;
   const pt=row.point==='manual'?'manual':row.point==='500m'?'500m':row.point==='meta'?'meta':'box';
 
-  if(pt==='manual'){ // botão de recurso: avança uma casa
-    if(q===16)finish(tm,ms);else{go(tm,q+1,ms);tick('info',tm,'Picagem manual',ms);}return;
+  if(pt==='manual'){ // recurso: avança uma casa
+    if(q===24)finish(tm,ms);else if(r===1)enterStation(tm,k,ms);else if(r===2)leaveStation(tm,k,ms);else{go(tm,q+1,ms);tick('turn',tm,`Viragem nos 500 m · Run ${k+1}`,ms);}return;
   }
   if(pt==='500m'){
-    if(q%2===1){tm.lastSplit={label:`Run ${k+1} ida`,secs:since};go(tm,q+1,ms);tick('turn',tm,`Viragem nos 500 m · Run ${k+1}`,ms);return;}
+    if(r===0){go(tm,q+1,ms);tm.lastSplit={label:`Run ${k+1} até aos 500 m`,secs:since};tick('turn',tm,`Viragem nos 500 m · Run ${k+1}`,ms);return;}
     if(since<DUP)return; // repetida
-    if(k<7){go(tm,q+2,ms);tick('warn',tm,`Picagem da box em falta depois do ${ST[k].name} · viragem Run ${k+2}`,ms);}
+    if(r===2&&k<7){go(tm,3*(k+1)+2,ms);tick('warn',tm,`Saída da box em falta depois do ${ST[k].name} · viragem Run ${k+2}`,ms);}
     return;
   }
   if(pt==='box'){
-    if(q%2===0){
-      if(since<DUP)return;
-      if(k===7){finish(tm,ms,'Picou na box em vez da meta · contou como meta');return;}
-      tm.lastSplit={label:`Volta + ${ST[k].name}`,secs:since};go(tm,q+1,ms);tick('station',tm,`${ST[k].name} feito · sai para a Run ${k+2}`,ms);return;
-    }
-    if(since<DUP)return; // ainda na ida: picagem repetida
-    if(k<7){go(tm,q+2,ms);tick('warn',tm,`Viragem dos 500 m em falta na Run ${k+1}`,ms);}
-    return;
+    if(since<DUP)return; // a mesma picagem repetida (nenhuma estação se faz em menos de 25 s)
+    if(r===1){enterStation(tm,k,ms);return;}
+    if(r===2){if(k<7)leaveStation(tm,k,ms);else finish(tm,ms,'Picou na box depois do Wall Balls · contou como meta');return;}
+    // ainda na ida: falhou a viragem dos 500 m, por isso esta é a entrada na box
+    enterStation(tm,k,ms,`Entrou no ${ST[k].name} · viragem dos 500 m da Run ${k+1} em falta`);return;
   }
   if(pt==='meta'){
-    if(k===7&&q===16){if(since<DUP)return;finish(tm,ms);return;}
-    if(k===7&&q===15){finish(tm,ms,'Cortou a meta · viragem dos 500 m da Run 8 em falta');return;}
+    if(k===7&&r===2){if(since<DUP)return;finish(tm,ms);return;}
+    if(k===7){finish(tm,ms,'Cortou a meta · faltaram picagens na Run 8 ou na entrada para o Wall Balls');return;}
     tick('warn',tm,'Picou na meta antes do tempo · ignorada',ms);return;
   }
 }
 function splitsOf(tm){
   const out=[];
   for(let k=0;k<8;k++){
-    const a=tm.times[2*k+1],b=tm.times[2*k+2],c=tm.times[2*k+3];
-    out.push({ida:(a&&b)?Math.round((b-a)/1000):null,resto:(b&&c)?Math.round((c-b)/1000):null});
+    const a=tm.times[3*k+1],e=tm.times[3*k+3],x=k<7?tm.times[3*k+4]:tm.times[FIN];
+    out.push({run:(a&&e)?Math.round((e-a)/1000):null,st:(e&&x)?Math.round((x-e)/1000):null});
   }
   return out;
 }
@@ -585,10 +580,10 @@ function placeTokens(arr,now){
 }
 function renderSplits(){
   const best=Array.from({length:16},()=>Infinity);const rows=S.teams.map(tm=>({tm,sp:splitsOf(tm)}));
-  rows.forEach(({sp})=>sp.forEach((s,k)=>{if(s.ida!=null)best[2*k]=Math.min(best[2*k],s.ida);if(s.resto!=null)best[2*k+1]=Math.min(best[2*k+1],s.resto);}));
-  $('spH').innerHTML='<tr><th>Equipa</th><th>Categoria</th>'+ST.map((s,k)=>`<th class="r">Run ${k+1} ida</th><th>Volta + ${esc(s.name)}</th>`).join('')+'<th>Total</th></tr>';
+  rows.forEach(({sp})=>sp.forEach((s,k)=>{if(s.run!=null)best[2*k]=Math.min(best[2*k],s.run);if(s.st!=null)best[2*k+1]=Math.min(best[2*k+1],s.st);}));
+  $('spH').innerHTML='<tr><th>Equipa</th><th>Categoria</th>'+ST.map((s,k)=>`<th class="r">Run ${k+1}</th><th>${esc(s.name)}</th>`).join('')+'<th>Total</th></tr>';
   $('spB').innerHTML=rows.sort((a,b)=>a.tm.rank-b.tm.rank).map(({tm,sp})=>'<tr><td class="name"><span class="dot" style="--c:'+tm.color+'"></span>'+esc(tm.name)+'</td><td>'+esc(tm.cat)+'</td>'+
-    sp.map((s,k)=>`<td class="${s.ida!=null&&s.ida===best[2*k]?'best':''}">${s.ida!=null?fmt(s.ida):'·'}</td><td class="${s.resto!=null&&s.resto===best[2*k+1]?'best':''}">${s.resto!=null?fmt(s.resto):'·'}</td>`).join('')+
+    sp.map((s,k)=>`<td class="${s.run!=null&&s.run===best[2*k]?'best':''}">${s.run!=null?fmt(s.run):'·'}</td><td class="${s.st!=null&&s.st===best[2*k+1]?'best':''}">${s.st!=null?fmt(s.st):'·'}</td>`).join('')+
     `<td><b>${tm.q>=FIN?fmt(elapsed(tm)):'·'}</b></td></tr>`).join('');
 }
 
