@@ -64,6 +64,8 @@ input,select{color:var(--chalk);background:var(--tile-hi);border:1px solid var(-
 .flash .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between}
 .flash button{background:rgba(0,0,0,.18);border-color:rgba(0,0,0,.25);color:inherit}
 .flash button.arm{background:var(--floor);color:var(--chalk)}
+.hold{border:2px dashed var(--warn)}
+.hold h2{color:var(--warn)}
 .link{background:none;border:0;padding:0;color:var(--gold);text-decoration:underline;font-weight:600;cursor:pointer}
 
 /* Heats em prova */
@@ -112,6 +114,12 @@ input,select{color:var(--chalk);background:var(--tile-hi);border:1px solid var(-
           <p class="muted">Toca nas equipas para as juntar ou tirar desta partida (por exemplo, uma equipa atrasada de outro heat).</p>
           <div class="teams" id="all"></div>
         </div>
+      </section>
+
+      <section class="card hold" id="holdCard" hidden>
+        <h2>Em espera</h2>
+        <p class="muted">Equipas que não partiram com o seu heat (por exemplo, chegaram atrasadas). Toca numa equipa para a juntar à próxima partida. Se não aparecer, deixa-a aqui: não atrapalha nada.</p>
+        <div class="teams" id="held"></div>
       </section>
 
       <section class="card">
@@ -204,15 +212,21 @@ client.channel('partida').on('postgres_changes',{event:'*',schema:'public',table
 setInterval(()=>{if(!$('app').hidden)loadRace();},15000);
 
 /* Desenho */
-function nextHeat(){const hs=roster.filter(r=>!started(r.team)).map(r=>r.heat);return hs.length?Math.min(...hs):0;}
-function selLabel(){const hs=[...new Set([...sel].map(heatOf))];return hs.length===1&&hs[0]?`H${hs[0]}`:'';}
+// um heat conta como partido assim que alguma equipa dele partiu; as que ficaram para trás passam a "em espera"
+function startedHeats(){return new Set(roster.filter(r=>started(r.team)).map(r=>r.heat));}
+function nextHeat(){const sh=startedHeats();const hs=roster.filter(r=>!sh.has(r.heat)).map(r=>r.heat);return hs.length?Math.min(...hs):0;}
+function heldTeams(){const sh=startedHeats();return roster.filter(r=>!started(r.team)&&sh.has(r.heat));}
+function selLabel(){const nh=nextHeat();if(nh&&[...sel].some(id=>heatOf(id)===nh))return `H${nh}`;
+  const sh=startedHeats(),hs=[...new Set([...sel].map(heatOf))];return hs.length===1&&hs[0]&&!sh.has(hs[0])?`H${hs[0]}`:'';}
 function paint(){
   if($('app').hidden)return;
   [...sel].forEach(id=>{if(started(id))sel.delete(id);});
   const nh=nextHeat();
   if(nh!==selHeat){selHeat=nh;sel=new Set(roster.filter(r=>r.heat===nh&&!started(r.team)).map(r=>r.team));}
   const hr=roster.filter(r=>r.heat===nh);
-  $('nh').innerHTML=nh?`<b>H${nh}</b><span>${esc(hr[0]?.heat_time||'')}</span><span class="cat" style="--c:${CAT[hr[0]?.category]||'var(--gold)'}">${esc(hr[0]?.category||'')}</span>`:'<b>Todas partiram</b>';
+  $('nh').innerHTML=nh?`<b>H${nh}</b><span>${esc(hr[0]?.heat_time||'')}</span><span class="cat" style="--c:${CAT[hr[0]?.category]||'var(--gold)'}">${esc(hr[0]?.category||'')}</span>`:(heldTeams().length?'<b>Só faltam equipas em espera</b>':'<b>Todas partiram</b>');
+  const held=heldTeams();$('holdCard').hidden=!held.length;
+  $('held').innerHTML=held.map(r=>`<button class="tm" type="button" data-t="${r.team}" aria-pressed="${sel.has(r.team)}"><span class="n">${r.team}</span>${esc(r.name)} <span class="muted">(H${r.heat})</span></button>`).join('');
   const heatTeams=roster.filter(r=>r.heat===nh&&!started(r.team));
   const extra=[...sel].filter(id=>heatOf(id)!==nh).map(id=>roster.find(r=>r.team===id)).filter(Boolean);
   $('pick').innerHTML=[...heatTeams,...extra].map(r=>`<button class="tm" type="button" data-t="${r.team}" aria-pressed="${sel.has(r.team)}"><span class="n">${r.team}</span>${esc(r.name)}</button>`).join('')||'<span class="muted">Não há equipas à espera.</span>';
@@ -232,7 +246,7 @@ function paint(){
 }
 setInterval(()=>{document.querySelectorAll('.heats .t').forEach(el=>{el.textContent=fmt((Date.now()-(+el.dataset.at))/1000);});},1000);
 function toggleSel(e){const b=e.target.closest('.tm');if(!b)return;const id=+b.dataset.t;sel.has(id)?sel.delete(id):sel.add(id);paint();}
-$('pick').addEventListener('click',toggleSel);$('all').addEventListener('click',toggleSel);
+$('pick').addEventListener('click',toggleSel);$('all').addEventListener('click',toggleSel);$('held').addEventListener('click',toggleSel);
 $('bOther').addEventListener('click',()=>{const o=$('others');o.hidden=!o.hidden;$('bOther').textContent=o.hidden?'Escolher outras equipas':'Fechar a lista';});
 
 /* Dar partida e anular */
@@ -242,8 +256,9 @@ $('bGo').addEventListener('click',async()=>{
   if(!sel.size||busy)return;busy=true;paint();
   const ids=[...sel],label=selLabel();
   try{const r=await call('start',{ids,label});
-    if(r.ok){race=r.data;lastStart=race.groups[race.groups.length-1];try{navigator.vibrate&&navigator.vibrate(150);}catch(e){}
-      flash('ok',`<div>Partida ${esc(lastStart.label)} às ${hms(lastStart.at)}</div><div class="row"><span>${lastStart.ids.map(id=>esc(nameOf(id))).join(' · ')}</span><button id="bUndo" type="button">Anular esta partida</button></div>`);
+    if(r.ok){race=r.data;lastStart=race.groups[race.groups.length-1];sel.clear();selHeat=-1;try{navigator.vibrate&&navigator.vibrate(150);}catch(e){}
+      const left=heldTeams().filter(r=>(r.heat===heatOf(lastStart.ids[0])));
+      flash('ok',`<div>Partida ${esc(lastStart.label)} às ${hms(lastStart.at)}</div><div class="row"><span>${lastStart.ids.map(id=>esc(nameOf(id))).join(' · ')}${left.length?`<br>Em espera: ${left.map(r=>esc(r.name)).join(', ')}`:''}</span><button id="bUndo" type="button">Anular esta partida</button></div>`);
       setTimeout(()=>{if(lastStart&&Date.now()-lastStart.at>120000)$('flash').hidden=true;},121000);}
     else flash('bad',`<div>${esc(r.msg||'Não deu partida.')}</div>`);
   }catch(e){flash('bad','<div>Sem ligação: a partida NÃO foi dada. Confirma a internet e carrega outra vez.</div>');}
@@ -253,7 +268,7 @@ $('flash').addEventListener('click',async e=>{
   const b=e.target.closest('#bUndo');if(!b)return;
   if(!b.classList.contains('arm')){b.classList.add('arm');b.textContent='Confirmar: anular?';clearTimeout(armU);armU=setTimeout(()=>{b.classList.remove('arm');b.textContent='Anular esta partida';},4000);return;}
   clearTimeout(armU);
-  try{const r=await call('undo');if(r.ok){race=r.data;if(r.undone){selHeat=-1;}flash('ok',`<div>${esc(r.msg)} As equipas voltaram a estar à espera.</div>`);lastStart=null;}
+  try{const r=await call('undo');if(r.ok){race=r.data;if(r.undone){selHeat=-1;sel.clear();}flash('ok',`<div>${esc(r.msg)} As equipas voltaram a estar à espera.</div>`);lastStart=null;}
     else flash('bad',`<div>${esc(r.msg||'Não deu para anular.')}</div>`);}
   catch(err){flash('bad','<div>Sem ligação. Tenta outra vez.</div>');}
   paint();
